@@ -1,0 +1,637 @@
+<!doctype html><html lang=en dir=auto><head><meta charset=utf-8><meta http-equiv=X-UA-Compatible content="IE=edge"><meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no"><meta name=robots content="index, follow"><title>Hugo + GitHub Pages 部署网站 | Shawn's Blog</title>
+<meta name=keywords content="tutorial"><meta name=description content='前言
+本教程详细说明在Mac上如何使用 Hugo + GitHub Pages + Paper Mod 主题来部署网站，通过私有仓库管理源码，公开仓库发布网站。
+最终仓库结构如下所示：
+私有仓库 (hugo-source)
+├── content/
+│   └── posts/
+│       └── hello-world.md    # 原始文章
+├── themes/
+├── hugo.yaml
+└── public/                   # 这个文件夹是一个独立的 git 仓库
+    ├── index.html           # 构建后的文件
+    ├── posts/
+    │   └── hello-world/
+    │       └── index.html   # 构建后的文章
+    └── ...
+公开仓库 (username.github.io)
+├── index.html               # 与 public 文件夹中的文件相同
+├── posts/
+│   └── hello-world/
+│       └── index.html
+└── ...
+步骤
+
+创建两个 GitHub 仓库
+
+- 私有仓库：hugo-source (用于存放源码)
+- 公开仓库：username.github.io (用于发布网站)
+
+安装必要工具
+
+# 安装 Hugo (以 Ubuntu 为例)
+# sudo apt install hugo
+# 安装 Hugo （以 Mac 为例）
+brew install hugo
+
+# 验证安装
+hugo version
+
+创建新的 Hugo 站点
+
+# 创建新站点, --format yaml 指定hugo 配置文件使用 yaml 格式，默认是toml格式
+hugo new site /Users/yourname/Documents/hugo-source --format yaml
+cd /Users/yourname/Documents/hugo-source
+
+# 初始化 git 仓库
+git init
+
+安装 PaperMod 主题
+
+git submodule add --depth=1 https://github.com/adityatelange/hugo-PaperMod.git themes/PaperMod
+git submodule update --init --recursive # needed when you reclone your repo (submodules may not get cloned automatically)
+
+
+配置 hugo.yaml
+
+
+    
+        点击查看
+        ▼
+    
+    
+        baseURL: https://username.github.io/
+languageCode: en-us
+title: My Blog
+theme: PaperMod
+
+# 基础设置
+enableGitInfo: false
+enableEmoji: true # 支持 emoji 显示
+paginate: 5 # 一页显示5篇文章
+
+# params底下的应该是PaperMod的设置
+params:
+  profileMode:
+    enabled: false
+  homeInfoParams:
+    Title: "👋 Welcome to My Blog"
+    Content: "Hi, this is my blog."
+  
+  socialIcons:
+    - name: "rss"
+      url: "/index.xml"
+    - name: "github"
+      url: "https://github.com/username"
+    # - name: "twitter"
+    #   url: "YOUR_TWITTER_URL"
+  # 首页显示最新文章
+  mainSections: ["posts"] 
+
+  label:
+    text: "My Blog"
+    icon: /apple-touch-icon.png  # 导航栏显示的图标
+    iconHeight: 35  # 控制导航栏图标大小
+
+  assets:
+    favicon: "/favicon.ico"
+    favicon16x16: "/favicon-16x16.png"
+    favicon32x32: "/favicon-32x32.png"
+    apple_touch_icon: "/apple-touch-icon.png"
+    android_chrome_192: "/android-chrome-192x192.png"
+    android_chrome_512: "/android-chrome-512x512.png"
+
+  env: production
+  defaultTheme: auto
+  disableSpecial1stPost: true
+  ShowRssButtonInSectionTermList: true
+  ShowToc: true
+  # 文章设置
+  ShowReadingTime: true # 显示阅读时间
+  ShowPostNavLinks: true
+  ShowBreadCrumbs: true
+  ShowCodeCopyButtons: true
+  ShowWordCount: true # 显示字数统计
+  ShowAuthor: true # 显示作者
+  ShowFavicon: true # 显示 favicon
+  
+  # 自定义文章信息显示格式
+  article:
+    showDate: true
+    showAuthor: true
+    showReadingTime: true
+    showEstimatedReadingTime: true # 显示估计阅读时间
+
+menu:
+  main:
+    - name: Posts
+      url: /posts/
+      weight: 1
+    - name: Archive
+      url: /archive/
+      weight: 2
+    - name: Search
+      url: /search/
+      weight: 3
+    - name: Tags
+      url: /tags/
+      weight: 4
+
+# 输出设置
+outputs:
+  home:
+    - HTML
+    - RSS
+    - JSON # 用于搜索功能
+
+# 文章页面设置
+permalinks:
+  posts: /:title/
+
+# Markdown 渲染设置
+markup:
+  goldmark:
+    renderer:
+        unsafe: true
+
+    
+ '><meta name=author content="Shawn"><link rel=canonical href=https://shenghairong.github.io/hugo--github-pages-%E9%83%A8%E7%BD%B2%E7%BD%91%E7%AB%99/><link crossorigin=anonymous href=/assets/css/stylesheet.a8b4f6acb85031cad9e897b88016add045657d84ce513eaec6ae90b7169db3af.css integrity="sha256-qLT2rLhQMcrZ6Je4gBat0EVlfYTOUT6uxq6Qtxads68=" rel="preload stylesheet" as=style><link rel=icon href=https://shenghairong.github.io/favicon.ico><link rel=icon type=image/png sizes=16x16 href=https://shenghairong.github.io/favicon-16x16.png><link rel=icon type=image/png sizes=32x32 href=https://shenghairong.github.io/favicon-32x32.png><link rel=apple-touch-icon href=https://shenghairong.github.io/apple-touch-icon.png><link rel=mask-icon href=https://shenghairong.github.io/safari-pinned-tab.svg><meta name=theme-color content="#2e2e33"><meta name=msapplication-TileColor content="#2e2e33"><link rel=alternate hreflang=en href=https://shenghairong.github.io/hugo--github-pages-%E9%83%A8%E7%BD%B2%E7%BD%91%E7%AB%99/><noscript><style>#theme-toggle,.top-link{display:none}</style><style>@media(prefers-color-scheme:dark){:root{--theme:rgb(29, 30, 32);--entry:rgb(46, 46, 51);--primary:rgb(218, 218, 219);--secondary:rgb(155, 156, 157);--tertiary:rgb(65, 66, 68);--content:rgb(196, 196, 197);--code-block-bg:rgb(46, 46, 51);--code-bg:rgb(55, 56, 62);--border:rgb(51, 51, 51)}.list{background:var(--theme)}.list:not(.dark)::-webkit-scrollbar-track{background:0 0}.list:not(.dark)::-webkit-scrollbar-thumb{border-color:var(--theme)}}</style></noscript><meta property="og:url" content="https://shenghairong.github.io/hugo--github-pages-%E9%83%A8%E7%BD%B2%E7%BD%91%E7%AB%99/"><meta property="og:site_name" content="Shawn's Blog"><meta property="og:title" content="Hugo + GitHub Pages 部署网站"><meta property="og:description" content='前言 本教程详细说明在Mac上如何使用 Hugo + GitHub Pages + Paper Mod 主题来部署网站，通过私有仓库管理源码，公开仓库发布网站。
+最终仓库结构如下所示：
+私有仓库 (hugo-source)
+├── content/ │ └── posts/ │ └── hello-world.md # 原始文章 ├── themes/ ├── hugo.yaml └── public/ # 这个文件夹是一个独立的 git 仓库 ├── index.html # 构建后的文件 ├── posts/ │ └── hello-world/ │ └── index.html # 构建后的文章 └── ... 公开仓库 (username.github.io)
+├── index.html # 与 public 文件夹中的文件相同 ├── posts/ │ └── hello-world/ │ └── index.html └── ... 步骤 创建两个 GitHub 仓库 - 私有仓库：hugo-source (用于存放源码) - 公开仓库：username.github.io (用于发布网站) 安装必要工具 # 安装 Hugo (以 Ubuntu 为例) # sudo apt install hugo # 安装 Hugo （以 Mac 为例） brew install hugo # 验证安装 hugo version 创建新的 Hugo 站点 # 创建新站点, --format yaml 指定hugo 配置文件使用 yaml 格式，默认是toml格式 hugo new site /Users/yourname/Documents/hugo-source --format yaml cd /Users/yourname/Documents/hugo-source # 初始化 git 仓库 git init 安装 PaperMod 主题 git submodule add --depth=1 https://github.com/adityatelange/hugo-PaperMod.git themes/PaperMod git submodule update --init --recursive # needed when you reclone your repo (submodules may not get cloned automatically) 配置 hugo.yaml 点击查看 ▼ baseURL: https://username.github.io/ languageCode: en-us title: My Blog theme: PaperMod # 基础设置 enableGitInfo: false enableEmoji: true # 支持 emoji 显示 paginate: 5 # 一页显示5篇文章 # params底下的应该是PaperMod的设置 params: profileMode: enabled: false homeInfoParams: Title: "👋 Welcome to My Blog" Content: "Hi, this is my blog." socialIcons: - name: "rss" url: "/index.xml" - name: "github" url: "https://github.com/username" # - name: "twitter" # url: "YOUR_TWITTER_URL" # 首页显示最新文章 mainSections: ["posts"] label: text: "My Blog" icon: /apple-touch-icon.png # 导航栏显示的图标 iconHeight: 35 # 控制导航栏图标大小 assets: favicon: "/favicon.ico" favicon16x16: "/favicon-16x16.png" favicon32x32: "/favicon-32x32.png" apple_touch_icon: "/apple-touch-icon.png" android_chrome_192: "/android-chrome-192x192.png" android_chrome_512: "/android-chrome-512x512.png" env: production defaultTheme: auto disableSpecial1stPost: true ShowRssButtonInSectionTermList: true ShowToc: true # 文章设置 ShowReadingTime: true # 显示阅读时间 ShowPostNavLinks: true ShowBreadCrumbs: true ShowCodeCopyButtons: true ShowWordCount: true # 显示字数统计 ShowAuthor: true # 显示作者 ShowFavicon: true # 显示 favicon # 自定义文章信息显示格式 article: showDate: true showAuthor: true showReadingTime: true showEstimatedReadingTime: true # 显示估计阅读时间 menu: main: - name: Posts url: /posts/ weight: 1 - name: Archive url: /archive/ weight: 2 - name: Search url: /search/ weight: 3 - name: Tags url: /tags/ weight: 4 # 输出设置 outputs: home: - HTML - RSS - JSON # 用于搜索功能 # 文章页面设置 permalinks: posts: /:title/ # Markdown 渲染设置 markup: goldmark: renderer: unsafe: true '><meta property="og:locale" content="en-us"><meta property="og:type" content="article"><meta property="article:section" content="posts"><meta property="article:published_time" content="2024-11-10T18:19:36+08:00"><meta property="article:modified_time" content="2024-11-10T18:19:36+08:00"><meta property="article:tag" content="Tutorial"><meta name=twitter:card content="summary"><meta name=twitter:title content="Hugo + GitHub Pages 部署网站"><meta name=twitter:description content='前言
+本教程详细说明在Mac上如何使用 Hugo + GitHub Pages + Paper Mod 主题来部署网站，通过私有仓库管理源码，公开仓库发布网站。
+最终仓库结构如下所示：
+私有仓库 (hugo-source)
+├── content/
+│   └── posts/
+│       └── hello-world.md    # 原始文章
+├── themes/
+├── hugo.yaml
+└── public/                   # 这个文件夹是一个独立的 git 仓库
+    ├── index.html           # 构建后的文件
+    ├── posts/
+    │   └── hello-world/
+    │       └── index.html   # 构建后的文章
+    └── ...
+公开仓库 (username.github.io)
+├── index.html               # 与 public 文件夹中的文件相同
+├── posts/
+│   └── hello-world/
+│       └── index.html
+└── ...
+步骤
+
+创建两个 GitHub 仓库
+
+- 私有仓库：hugo-source (用于存放源码)
+- 公开仓库：username.github.io (用于发布网站)
+
+安装必要工具
+
+# 安装 Hugo (以 Ubuntu 为例)
+# sudo apt install hugo
+# 安装 Hugo （以 Mac 为例）
+brew install hugo
+
+# 验证安装
+hugo version
+
+创建新的 Hugo 站点
+
+# 创建新站点, --format yaml 指定hugo 配置文件使用 yaml 格式，默认是toml格式
+hugo new site /Users/yourname/Documents/hugo-source --format yaml
+cd /Users/yourname/Documents/hugo-source
+
+# 初始化 git 仓库
+git init
+
+安装 PaperMod 主题
+
+git submodule add --depth=1 https://github.com/adityatelange/hugo-PaperMod.git themes/PaperMod
+git submodule update --init --recursive # needed when you reclone your repo (submodules may not get cloned automatically)
+
+
+配置 hugo.yaml
+
+
+    
+        点击查看
+        ▼
+    
+    
+        baseURL: https://username.github.io/
+languageCode: en-us
+title: My Blog
+theme: PaperMod
+
+# 基础设置
+enableGitInfo: false
+enableEmoji: true # 支持 emoji 显示
+paginate: 5 # 一页显示5篇文章
+
+# params底下的应该是PaperMod的设置
+params:
+  profileMode:
+    enabled: false
+  homeInfoParams:
+    Title: "👋 Welcome to My Blog"
+    Content: "Hi, this is my blog."
+  
+  socialIcons:
+    - name: "rss"
+      url: "/index.xml"
+    - name: "github"
+      url: "https://github.com/username"
+    # - name: "twitter"
+    #   url: "YOUR_TWITTER_URL"
+  # 首页显示最新文章
+  mainSections: ["posts"] 
+
+  label:
+    text: "My Blog"
+    icon: /apple-touch-icon.png  # 导航栏显示的图标
+    iconHeight: 35  # 控制导航栏图标大小
+
+  assets:
+    favicon: "/favicon.ico"
+    favicon16x16: "/favicon-16x16.png"
+    favicon32x32: "/favicon-32x32.png"
+    apple_touch_icon: "/apple-touch-icon.png"
+    android_chrome_192: "/android-chrome-192x192.png"
+    android_chrome_512: "/android-chrome-512x512.png"
+
+  env: production
+  defaultTheme: auto
+  disableSpecial1stPost: true
+  ShowRssButtonInSectionTermList: true
+  ShowToc: true
+  # 文章设置
+  ShowReadingTime: true # 显示阅读时间
+  ShowPostNavLinks: true
+  ShowBreadCrumbs: true
+  ShowCodeCopyButtons: true
+  ShowWordCount: true # 显示字数统计
+  ShowAuthor: true # 显示作者
+  ShowFavicon: true # 显示 favicon
+  
+  # 自定义文章信息显示格式
+  article:
+    showDate: true
+    showAuthor: true
+    showReadingTime: true
+    showEstimatedReadingTime: true # 显示估计阅读时间
+
+menu:
+  main:
+    - name: Posts
+      url: /posts/
+      weight: 1
+    - name: Archive
+      url: /archive/
+      weight: 2
+    - name: Search
+      url: /search/
+      weight: 3
+    - name: Tags
+      url: /tags/
+      weight: 4
+
+# 输出设置
+outputs:
+  home:
+    - HTML
+    - RSS
+    - JSON # 用于搜索功能
+
+# 文章页面设置
+permalinks:
+  posts: /:title/
+
+# Markdown 渲染设置
+markup:
+  goldmark:
+    renderer:
+        unsafe: true
+
+    
+ '><script type=application/ld+json>{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Posts","item":"https://shenghairong.github.io/posts/"},{"@type":"ListItem","position":2,"name":"Hugo + GitHub Pages 部署网站","item":"https://shenghairong.github.io/hugo--github-pages-%E9%83%A8%E7%BD%B2%E7%BD%91%E7%AB%99/"}]}</script><script type=application/ld+json>{"@context":"https://schema.org","@type":"BlogPosting","headline":"Hugo + GitHub Pages 部署网站","name":"Hugo \u002b GitHub Pages 部署网站","description":"前言 本教程详细说明在Mac上如何使用 Hugo + GitHub Pages + Paper Mod 主题来部署网站，通过私有仓库管理源码，公开仓库发布网站。\n最终仓库结构如下所示：\n私有仓库 (hugo-source)\n├── content/ │ └── posts/ │ └── hello-world.md # 原始文章 ├── themes/ ├── hugo.yaml └── public/ # 这个文件夹是一个独立的 git 仓库 ├── index.html # 构建后的文件 ├── posts/ │ └── hello-world/ │ └── index.html # 构建后的文章 └── ... 公开仓库 (username.github.io)\n├── index.html # 与 public 文件夹中的文件相同 ├── posts/ │ └── hello-world/ │ └── index.html └── ... 步骤 创建两个 GitHub 仓库 - 私有仓库：hugo-source (用于存放源码) - 公开仓库：username.github.io (用于发布网站) 安装必要工具 # 安装 Hugo (以 Ubuntu 为例) # sudo apt install hugo # 安装 Hugo （以 Mac 为例） brew install hugo # 验证安装 hugo version 创建新的 Hugo 站点 # 创建新站点, --format yaml 指定hugo 配置文件使用 yaml 格式，默认是toml格式 hugo new site /Users/yourname/Documents/hugo-source --format yaml cd /Users/yourname/Documents/hugo-source # 初始化 git 仓库 git init 安装 PaperMod 主题 git submodule add --depth=1 https://github.com/adityatelange/hugo-PaperMod.git themes/PaperMod git submodule update --init --recursive # needed when you reclone your repo (submodules may not get cloned automatically) 配置 hugo.yaml 点击查看 ▼ baseURL: https://username.github.io/ languageCode: en-us title: My Blog theme: PaperMod # 基础设置 enableGitInfo: false enableEmoji: true # 支持 emoji 显示 paginate: 5 # 一页显示5篇文章 # params底下的应该是PaperMod的设置 params: profileMode: enabled: false homeInfoParams: Title: \u0026#34;👋 Welcome to My Blog\u0026#34; Content: \u0026#34;Hi, this is my blog.\u0026#34; socialIcons: - name: \u0026#34;rss\u0026#34; url: \u0026#34;/index.xml\u0026#34; - name: \u0026#34;github\u0026#34; url: \u0026#34;https://github.com/username\u0026#34; # - name: \u0026#34;twitter\u0026#34; # url: \u0026#34;YOUR_TWITTER_URL\u0026#34; # 首页显示最新文章 mainSections: [\u0026#34;posts\u0026#34;] label: text: \u0026#34;My Blog\u0026#34; icon: /apple-touch-icon.png # 导航栏显示的图标 iconHeight: 35 # 控制导航栏图标大小 assets: favicon: \u0026#34;/favicon.ico\u0026#34; favicon16x16: \u0026#34;/favicon-16x16.png\u0026#34; favicon32x32: \u0026#34;/favicon-32x32.png\u0026#34; apple_touch_icon: \u0026#34;/apple-touch-icon.png\u0026#34; android_chrome_192: \u0026#34;/android-chrome-192x192.png\u0026#34; android_chrome_512: \u0026#34;/android-chrome-512x512.png\u0026#34; env: production defaultTheme: auto disableSpecial1stPost: true ShowRssButtonInSectionTermList: true ShowToc: true # 文章设置 ShowReadingTime: true # 显示阅读时间 ShowPostNavLinks: true ShowBreadCrumbs: true ShowCodeCopyButtons: true ShowWordCount: true # 显示字数统计 ShowAuthor: true # 显示作者 ShowFavicon: true # 显示 favicon # 自定义文章信息显示格式 article: showDate: true showAuthor: true showReadingTime: true showEstimatedReadingTime: true # 显示估计阅读时间 menu: main: - name: Posts url: /posts/ weight: 1 - name: Archive url: /archive/ weight: 2 - name: Search url: /search/ weight: 3 - name: Tags url: /tags/ weight: 4 # 输出设置 outputs: home: - HTML - RSS - JSON # 用于搜索功能 # 文章页面设置 permalinks: posts: /:title/ # Markdown 渲染设置 markup: goldmark: renderer: unsafe: true ","keywords":["tutorial"],"articleBody":"前言 本教程详细说明在Mac上如何使用 Hugo + GitHub Pages + Paper Mod 主题来部署网站，通过私有仓库管理源码，公开仓库发布网站。\n最终仓库结构如下所示：\n私有仓库 (hugo-source)\n├── content/ │ └── posts/ │ └── hello-world.md # 原始文章 ├── themes/ ├── hugo.yaml └── public/ # 这个文件夹是一个独立的 git 仓库 ├── index.html # 构建后的文件 ├── posts/ │ └── hello-world/ │ └── index.html # 构建后的文章 └── ... 公开仓库 (username.github.io)\n├── index.html # 与 public 文件夹中的文件相同 ├── posts/ │ └── hello-world/ │ └── index.html └── ... 步骤 创建两个 GitHub 仓库 - 私有仓库：hugo-source (用于存放源码) - 公开仓库：username.github.io (用于发布网站) 安装必要工具 # 安装 Hugo (以 Ubuntu 为例) # sudo apt install hugo # 安装 Hugo （以 Mac 为例） brew install hugo # 验证安装 hugo version 创建新的 Hugo 站点 # 创建新站点, --format yaml 指定hugo 配置文件使用 yaml 格式，默认是toml格式 hugo new site /Users/yourname/Documents/hugo-source --format yaml cd /Users/yourname/Documents/hugo-source # 初始化 git 仓库 git init 安装 PaperMod 主题 git submodule add --depth=1 https://github.com/adityatelange/hugo-PaperMod.git themes/PaperMod git submodule update --init --recursive # needed when you reclone your repo (submodules may not get cloned automatically) 配置 hugo.yaml 点击查看 ▼ baseURL: https://username.github.io/ languageCode: en-us title: My Blog theme: PaperMod # 基础设置 enableGitInfo: false enableEmoji: true # 支持 emoji 显示 paginate: 5 # 一页显示5篇文章 # params底下的应该是PaperMod的设置 params: profileMode: enabled: false homeInfoParams: Title: \"👋 Welcome to My Blog\" Content: \"Hi, this is my blog.\" socialIcons: - name: \"rss\" url: \"/index.xml\" - name: \"github\" url: \"https://github.com/username\" # - name: \"twitter\" # url: \"YOUR_TWITTER_URL\" # 首页显示最新文章 mainSections: [\"posts\"] label: text: \"My Blog\" icon: /apple-touch-icon.png # 导航栏显示的图标 iconHeight: 35 # 控制导航栏图标大小 assets: favicon: \"/favicon.ico\" favicon16x16: \"/favicon-16x16.png\" favicon32x32: \"/favicon-32x32.png\" apple_touch_icon: \"/apple-touch-icon.png\" android_chrome_192: \"/android-chrome-192x192.png\" android_chrome_512: \"/android-chrome-512x512.png\" env: production defaultTheme: auto disableSpecial1stPost: true ShowRssButtonInSectionTermList: true ShowToc: true # 文章设置 ShowReadingTime: true # 显示阅读时间 ShowPostNavLinks: true ShowBreadCrumbs: true ShowCodeCopyButtons: true ShowWordCount: true # 显示字数统计 ShowAuthor: true # 显示作者 ShowFavicon: true # 显示 favicon # 自定义文章信息显示格式 article: showDate: true showAuthor: true showReadingTime: true showEstimatedReadingTime: true # 显示估计阅读时间 menu: main: - name: Posts url: /posts/ weight: 1 - name: Archive url: /archive/ weight: 2 - name: Search url: /search/ weight: 3 - name: Tags url: /tags/ weight: 4 # 输出设置 outputs: home: - HTML - RSS - JSON # 用于搜索功能 # 文章页面设置 permalinks: posts: /:title/ # Markdown 渲染设置 markup: goldmark: renderer: unsafe: true 配置搜索和归档功能\n为了确保搜索功能正常工作，创建 content/search.md：\n--- title: \"Search\" layout: \"search\" --- 还需要创建 content/archive.md：\n--- title: \"Archive\" layout: \"archives\" url: \"/archive/\" summary: archives --- 自定义浏览器标签栏图标\n选择你喜欢的图片，在 favicon.io 网站上生成 favicon 将生成的文件下载并替换到 static 目录下, 结构如下： hugo-source/ ├── content/ ├── static/ │ ├── android-chrome-192x192.png # Android Chrome 浏览器图标（中尺寸） │ ├── android-chrome-512x512.png # Android Chrome 浏览器图标（大尺寸） │ ├── apple-touch-icon.png # iOS/macOS 设备图标 (180x180) │ ├── favicon-16x16.png # 小尺寸网站图标 │ ├── favicon-32x32.png # 标准网站图标 │ └── favicon.ico # 基础网站图标（兼容性） ... └── hugo.yaml 创建第一篇文章\n# 创建新文章 hugo new posts/hello-world/index.md 编辑 content/posts/hello-world/index.md:\n--- title: \"Hello World\" date: 2024-11-10 draft: false tags: [\"test\"] --- This is my first post! 设置部署工作流 在 hugo-source 仓库中创建文件 .github/workflows/deploy.yaml: 点击查看 ▼ name: Deploy Hugo site to Pages on: push: branches: - main workflow_dispatch: # 允许手动触发 # 设置并发部署策略 concurrency: group: \"pages\" cancel-in-progress: false # 默认使用 bash defaults: run: shell: bash jobs: build-and-deploy: runs-on: ubuntu-latest env: HUGO_VERSION: 0.138.0 # 指定 Hugo 版本 steps: # 安装 Hugo - name: Install Hugo CLI run: | wget -O ${{ runner.temp }}/hugo.deb https://github.com/gohugoio/hugo/releases/download/v${HUGO_VERSION}/hugo_extended_${HUGO_VERSION}_linux-amd64.deb \\ \u0026\u0026 sudo dpkg -i ${{ runner.temp }}/hugo.deb # 安装 Dart Sass（如果需要） - name: Install Dart Sass run: sudo snap install dart-sass # 检出代码 - name: Checkout uses: actions/checkout@v4 with: submodules: recursive # 获取子模块 fetch-depth: 0 # 获取完整的 git 历史 # 安装 Node.js 依赖（如果需要） - name: Install Node.js dependencies run: | if [[ -f package-lock.json || -f npm-shrinkwrap.json ]]; then npm ci fi # 构建 Hugo 站点 - name: Build with Hugo env: HUGO_ENVIRONMENT: production TZ: Asia/Shanghai # 设置时区 run: | hugo \\ --gc \\ --minify \\ --baseURL \"https://username.github.io/\" # 替换为你的 URL # 部署到外部仓库 - name: Deploy uses: peaceiris/actions-gh-pages@v3 with: deploy_key: ${{ secrets.ACTIONS_DEPLOY_KEY }} external_repository: username/username.github.io # 替换为你的外部仓库 publish_branch: main publish_dir: ./public commit_message: ${{ github.event.head_commit.message }} user_name: 'github-actions[bot]' user_email: 'github-actions[bot]@users.noreply.github.com' 折叠长代码块\n在 assets/css/extended/custom.css 文件中添加以下代码： 点击查看 ▼ ```css /* 折叠代码块 */ .collapse-wrapper { margin: 1rem 0; } .collapse-button { width: 100%; padding: 0.5rem; background-color: var(--border); border: none; cursor: pointer; text-align: left; font-size: 0.9rem; } .collapse-button:hover { background-color: var(--border-hover); } .collapse-content { display: none; padding: 1rem; border: 1px solid var(--border); } .collapse-wrapper.active .collapse-content { display: block; } /* 暗色主题适配 */ [theme=\"dark\"] .collapse-button { background-color: var(--entry); color: var(--primary); } [theme=\"dark\"] .collapse-button:hover { background-color: var(--border); } /* 折叠代码块 结束 */ ``` 在 layouts/shortcodes/collapsible.html 文件中添加以下代码：\n{{ $_hugo_config := `{ \"version\": 1 }` }} \u003cdiv class=\"collapse-wrapper\"\u003e \u003cbutton class=\"collapse-button\" onclick=\"this.parentElement.classList.toggle('active')\"\u003e {{ with .Get \"summary\" }}{{ . }}{{ else }}点击展开{{ end }} \u003cspan class=\"collapse-icon\"\u003e▼\u003c/span\u003e \u003c/button\u003e \u003cdiv class=\"collapse-content\"\u003e {{ .Inner | markdownify }} \u003c/div\u003e \u003c/div\u003e 在写markdown时，使用如下代码包裹需要折叠的代码块。 {‎{\u003c collapsible summary=\"点击查看\" \u003e}} ```python Long code block ``` {‎{\u003c /collapsible \u003e}} 设置部署密钥\n首先生成 SSH 密钥对： # 在本地终端执行 ssh-keygen -t rsa -b 4096 -C \"your_email@example.com\" -f gh-pages 这会生成两个文件：\ngh-pages（私钥） gh-pages.pub（公钥） 在私有仓库 (hugo-source) 添加私钥： 打开私有仓库的 Settings 点击左侧的 “Secrets and variables” -\u003e “Actions” 点击 “New repository secret” Name 填写：ACTIONS_DEPLOY_KEY Secret 填写：复制 gh-pages 文件的全部内容（私钥） 点击 “Add secret” 在公开仓库 (username.github.io) 添加公钥： 打开公开仓库的 Settings 点击左侧的 “Deploy keys” 点击 “Add deploy key” Title 填写：HUGO_DEPLOY_KEY（或其他描述性名称） Key 填写：复制 gh-pages.pub 文件的全部内容（公钥） 勾选 “Allow write access” 点击 “Add key” 查看私钥/公钥内容的命令：\n# 查看私钥内容（添加到 ACTIONS_DEPLOY_KEY） cat gh-pages # 查看公钥内容（添加到 Deploy keys） cat gh-pages.pub 设置完成后：\n工作流将使用这个密钥对来安全地将构建后的内容推送到公开仓库 私钥保存在私有仓库的 secrets 中，用于签名 公钥保存在公开仓库的 deploy keys 中，用于验证 记得：\n密钥生成后要立即妥善保管，特别是私钥部分 确保将完整的密钥内容复制，包括开头的 -----BEGIN... 和结尾的 -----END... 添加后可以删除本地的 gh-pages 和 gh-pages.pub 文件 这样设置后，GitHub Actions 就能安全地将构建的内容部署到公开仓库了。\n初始化和推送源码仓库\n# 在 hugo-source 目录下 git add . git commit -m \"Initial commit\" # git branch -M main #(如果需要) git remote add origin git@github.com:username/hugo-source.git git push -u origin main 完成设置 等待 GitHub Actions 完成部署 访问 https://username.github.io 查看你的网站 维护网站的工作流程 在本地 hugo-source 目录中编写新文章： hugo new posts/new-post/index.md 编辑文章内容, 如果使用cursor，可以直接在 content/posts/new-post/index.md 文件中复制粘贴图片，cursor会自动将图片保存到 content/posts/new-post/下。\n本地预览（可选）：\nhugo server -D # -D 参数用于启用草稿模式，即 draft 为 true 的文章也会被预览 # 如果文章设置的 draft 为 false，则需要手动删除 -D 参数 提交和推送更改： git add . git commit -m \"Add new post\" git push origin main GitHub Actions 会自动部署更新后的内容到你的网站 注意事项 将 username 替换为你的 GitHub 用户名 确保在 GitHub 上正确配置了 SSH 密钥 私有仓库中的 public 目录应该被添加到 .gitignore 中 如果使用自定义域名，需要在 GitHub Pages 设置中配置，并在 static 目录下添加 CNAME 文件 为了保护隐私，建议使用 ExifTool 工具清除图片中的元数据（metadata）。这些元数据可能包含设备信息、拍摄位置等敏感信息（参考链接）： # 安装 ExifTool brew install exiftool # 清除指定目录下所有图片的元数据（会直接覆盖原文件） exiftool -a -all:all= -r 图片目录路径 -overwrite_original 总结 这样设置后，你就可以在私有仓库中管理网站源码，而生成的静态文件会自动部署到公开仓库中展示。这种方式既保护了源码，又能享受 GitHub Pages 的免费托管服务。\n","wordCount":"992","inLanguage":"en","datePublished":"2024-11-10T18:19:36+08:00","dateModified":"2024-11-10T18:19:36+08:00","author":{"@type":"Person","name":"Shawn"},"mainEntityOfPage":{"@type":"WebPage","@id":"https://shenghairong.github.io/hugo--github-pages-%E9%83%A8%E7%BD%B2%E7%BD%91%E7%AB%99/"},"publisher":{"@type":"Organization","name":"Shawn's Blog","logo":{"@type":"ImageObject","url":"https://shenghairong.github.io/favicon.ico"}}}</script></head><body id=top><script>localStorage.getItem("pref-theme")==="dark"?document.body.classList.add("dark"):localStorage.getItem("pref-theme")==="light"?document.body.classList.remove("dark"):window.matchMedia("(prefers-color-scheme: dark)").matches&&document.body.classList.add("dark")</script><header class=header><nav class=nav><div class=logo><a href=https://shenghairong.github.io/ accesskey=h title="Shawn's Blog (Alt + H)"><img src=https://shenghairong.github.io/apple-touch-icon.png alt aria-label=logo height=35>Shawn's Blog</a><div class=logo-switches><button id=theme-toggle accesskey=t title="(Alt + T)"><svg id="moon" width="24" height="18" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg><svg id="sun" width="24" height="18" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg></button></div></div><ul id=menu><li><a href=https://shenghairong.github.io/posts/ title=Posts><span>Posts</span></a></li><li><a href=https://shenghairong.github.io/archive/ title=Archive><span>Archive</span></a></li><li><a href=https://shenghairong.github.io/search/ title="Search (Alt + /)" accesskey=/><span>Search</span></a></li><li><a href=https://shenghairong.github.io/tags/ title=Tags><span>Tags</span></a></li></ul></nav></header><main class=main><article class=post-single><header class=post-header><div class=breadcrumbs><a href=https://shenghairong.github.io/>Home</a>&nbsp;»&nbsp;<a href=https://shenghairong.github.io/posts/>Posts</a></div><h1 class="post-title entry-hint-parent">Hugo + GitHub Pages 部署网站</h1><div class=post-meta><span title='2024-11-10 18:19:36 +0800 CST'>November 10, 2024</span>&nbsp;·&nbsp;5 min&nbsp;·&nbsp;992 words&nbsp;·&nbsp;Shawn</div></header><div class=toc><details><summary accesskey=c title="(Alt + C)"><span class=details>Table of Contents</span></summary><div class=inner><ul><li><a href=#%e5%89%8d%e8%a8%80 aria-label=前言>前言</a></li><li><a href=#%e6%ad%a5%e9%aa%a4 aria-label=步骤>步骤</a></li><li><a href=#%e7%bb%b4%e6%8a%a4%e7%bd%91%e7%ab%99%e7%9a%84%e5%b7%a5%e4%bd%9c%e6%b5%81%e7%a8%8b aria-label=维护网站的工作流程>维护网站的工作流程</a></li><li><a href=#%e6%b3%a8%e6%84%8f%e4%ba%8b%e9%a1%b9 aria-label=注意事项>注意事项</a></li><li><a href=#%e6%80%bb%e7%bb%93 aria-label=总结>总结</a></li></ul></div></details></div><div class=post-content><h2 id=前言>前言<a hidden class=anchor aria-hidden=true href=#前言>#</a></h2><p>本教程详细说明在Mac上如何使用 Hugo + GitHub Pages + Paper Mod 主题来部署网站，通过私有仓库管理源码，公开仓库发布网站。</p><p>最终仓库结构如下所示：</p><p>私有仓库 (hugo-source)</p><pre tabindex=0><code>├── content/
+│   └── posts/
+│       └── hello-world.md    # 原始文章
+├── themes/
+├── hugo.yaml
+└── public/                   # 这个文件夹是一个独立的 git 仓库
+    ├── index.html           # 构建后的文件
+    ├── posts/
+    │   └── hello-world/
+    │       └── index.html   # 构建后的文章
+    └── ...
+</code></pre><p>公开仓库 (username.github.io)</p><pre tabindex=0><code>├── index.html               # 与 public 文件夹中的文件相同
+├── posts/
+│   └── hello-world/
+│       └── index.html
+└── ...
+</code></pre><h2 id=步骤>步骤<a hidden class=anchor aria-hidden=true href=#步骤>#</a></h2><ol><li><strong>创建两个 GitHub 仓库</strong></li></ol><pre tabindex=0><code>- 私有仓库：hugo-source (用于存放源码)
+- 公开仓库：username.github.io (用于发布网站)
+</code></pre><ol start=2><li><strong>安装必要工具</strong></li></ol><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span><span style=color:#75715e># 安装 Hugo (以 Ubuntu 为例)</span>
+</span></span><span style=display:flex><span><span style=color:#75715e># sudo apt install hugo</span>
+</span></span><span style=display:flex><span><span style=color:#75715e># 安装 Hugo （以 Mac 为例）</span>
+</span></span><span style=display:flex><span>brew install hugo
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e># 验证安装</span>
+</span></span><span style=display:flex><span>hugo version
+</span></span></code></pre></div><ol start=3><li><strong>创建新的 Hugo 站点</strong></li></ol><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span><span style=color:#75715e># 创建新站点, --format yaml 指定hugo 配置文件使用 yaml 格式，默认是toml格式</span>
+</span></span><span style=display:flex><span>hugo new site /Users/yourname/Documents/hugo-source --format yaml
+</span></span><span style=display:flex><span>cd /Users/yourname/Documents/hugo-source
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e># 初始化 git 仓库</span>
+</span></span><span style=display:flex><span>git init
+</span></span></code></pre></div><ol start=4><li><a href=https://github.com/adityatelange/hugo-PaperMod/wiki/Installation><strong>安装 PaperMod 主题</strong></a></li></ol><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span>git submodule add --depth<span style=color:#f92672>=</span><span style=color:#ae81ff>1</span> https://github.com/adityatelange/hugo-PaperMod.git themes/PaperMod
+</span></span><span style=display:flex><span>git submodule update --init --recursive <span style=color:#75715e># needed when you reclone your repo (submodules may not get cloned automatically)</span>
+</span></span></code></pre></div><ol start=5><li><p><strong>配置 hugo.yaml</strong><div class=collapse-wrapper><button class=collapse-button onclick='this.parentElement.classList.toggle("active")'>
+点击查看
+<span class=collapse-icon>▼</span></button><div class=collapse-content><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-yaml data-lang=yaml><span style=display:flex><span><span style=color:#f92672>baseURL</span>: <span style=color:#ae81ff>https://username.github.io/</span>
+</span></span><span style=display:flex><span><span style=color:#f92672>languageCode</span>: <span style=color:#ae81ff>en-us</span>
+</span></span><span style=display:flex><span><span style=color:#f92672>title</span>: <span style=color:#ae81ff>My Blog</span>
+</span></span><span style=display:flex><span><span style=color:#f92672>theme</span>: <span style=color:#ae81ff>PaperMod</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e># 基础设置</span>
+</span></span><span style=display:flex><span><span style=color:#f92672>enableGitInfo</span>: <span style=color:#66d9ef>false</span>
+</span></span><span style=display:flex><span><span style=color:#f92672>enableEmoji</span>: <span style=color:#66d9ef>true</span> <span style=color:#75715e># 支持 emoji 显示</span>
+</span></span><span style=display:flex><span><span style=color:#f92672>paginate</span>: <span style=color:#ae81ff>5</span> <span style=color:#75715e># 一页显示5篇文章</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e># params底下的应该是PaperMod的设置</span>
+</span></span><span style=display:flex><span><span style=color:#f92672>params</span>:
+</span></span><span style=display:flex><span>  <span style=color:#f92672>profileMode</span>:
+</span></span><span style=display:flex><span>    <span style=color:#f92672>enabled</span>: <span style=color:#66d9ef>false</span>
+</span></span><span style=display:flex><span>  <span style=color:#f92672>homeInfoParams</span>:
+</span></span><span style=display:flex><span>    <span style=color:#f92672>Title</span>: <span style=color:#e6db74>&#34;👋 Welcome to My Blog&#34;</span>
+</span></span><span style=display:flex><span>    <span style=color:#f92672>Content</span>: <span style=color:#e6db74>&#34;Hi, this is my blog.&#34;</span>
+</span></span><span style=display:flex><span>  
+</span></span><span style=display:flex><span>  <span style=color:#f92672>socialIcons</span>:
+</span></span><span style=display:flex><span>    - <span style=color:#f92672>name</span>: <span style=color:#e6db74>&#34;rss&#34;</span>
+</span></span><span style=display:flex><span>      <span style=color:#f92672>url</span>: <span style=color:#e6db74>&#34;/index.xml&#34;</span>
+</span></span><span style=display:flex><span>    - <span style=color:#f92672>name</span>: <span style=color:#e6db74>&#34;github&#34;</span>
+</span></span><span style=display:flex><span>      <span style=color:#f92672>url</span>: <span style=color:#e6db74>&#34;https://github.com/username&#34;</span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e># - name: &#34;twitter&#34;</span>
+</span></span><span style=display:flex><span>    <span style=color:#75715e>#   url: &#34;YOUR_TWITTER_URL&#34;</span>
+</span></span><span style=display:flex><span>  <span style=color:#75715e># 首页显示最新文章</span>
+</span></span><span style=display:flex><span>  <span style=color:#f92672>mainSections</span>: [<span style=color:#e6db74>&#34;posts&#34;</span>] 
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>  <span style=color:#f92672>label</span>:
+</span></span><span style=display:flex><span>    <span style=color:#f92672>text</span>: <span style=color:#e6db74>&#34;My Blog&#34;</span>
+</span></span><span style=display:flex><span>    <span style=color:#f92672>icon</span>: <span style=color:#ae81ff>/apple-touch-icon.png </span> <span style=color:#75715e># 导航栏显示的图标</span>
+</span></span><span style=display:flex><span>    <span style=color:#f92672>iconHeight</span>: <span style=color:#ae81ff>35</span>  <span style=color:#75715e># 控制导航栏图标大小</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>  <span style=color:#f92672>assets</span>:
+</span></span><span style=display:flex><span>    <span style=color:#f92672>favicon</span>: <span style=color:#e6db74>&#34;/favicon.ico&#34;</span>
+</span></span><span style=display:flex><span>    <span style=color:#f92672>favicon16x16</span>: <span style=color:#e6db74>&#34;/favicon-16x16.png&#34;</span>
+</span></span><span style=display:flex><span>    <span style=color:#f92672>favicon32x32</span>: <span style=color:#e6db74>&#34;/favicon-32x32.png&#34;</span>
+</span></span><span style=display:flex><span>    <span style=color:#f92672>apple_touch_icon</span>: <span style=color:#e6db74>&#34;/apple-touch-icon.png&#34;</span>
+</span></span><span style=display:flex><span>    <span style=color:#f92672>android_chrome_192</span>: <span style=color:#e6db74>&#34;/android-chrome-192x192.png&#34;</span>
+</span></span><span style=display:flex><span>    <span style=color:#f92672>android_chrome_512</span>: <span style=color:#e6db74>&#34;/android-chrome-512x512.png&#34;</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>  <span style=color:#f92672>env</span>: <span style=color:#ae81ff>production</span>
+</span></span><span style=display:flex><span>  <span style=color:#f92672>defaultTheme</span>: <span style=color:#ae81ff>auto</span>
+</span></span><span style=display:flex><span>  <span style=color:#f92672>disableSpecial1stPost</span>: <span style=color:#66d9ef>true</span>
+</span></span><span style=display:flex><span>  <span style=color:#f92672>ShowRssButtonInSectionTermList</span>: <span style=color:#66d9ef>true</span>
+</span></span><span style=display:flex><span>  <span style=color:#f92672>ShowToc</span>: <span style=color:#66d9ef>true</span>
+</span></span><span style=display:flex><span>  <span style=color:#75715e># 文章设置</span>
+</span></span><span style=display:flex><span>  <span style=color:#f92672>ShowReadingTime</span>: <span style=color:#66d9ef>true</span> <span style=color:#75715e># 显示阅读时间</span>
+</span></span><span style=display:flex><span>  <span style=color:#f92672>ShowPostNavLinks</span>: <span style=color:#66d9ef>true</span>
+</span></span><span style=display:flex><span>  <span style=color:#f92672>ShowBreadCrumbs</span>: <span style=color:#66d9ef>true</span>
+</span></span><span style=display:flex><span>  <span style=color:#f92672>ShowCodeCopyButtons</span>: <span style=color:#66d9ef>true</span>
+</span></span><span style=display:flex><span>  <span style=color:#f92672>ShowWordCount</span>: <span style=color:#66d9ef>true</span> <span style=color:#75715e># 显示字数统计</span>
+</span></span><span style=display:flex><span>  <span style=color:#f92672>ShowAuthor</span>: <span style=color:#66d9ef>true</span> <span style=color:#75715e># 显示作者</span>
+</span></span><span style=display:flex><span>  <span style=color:#f92672>ShowFavicon</span>: <span style=color:#66d9ef>true</span> <span style=color:#75715e># 显示 favicon</span>
+</span></span><span style=display:flex><span>  
+</span></span><span style=display:flex><span>  <span style=color:#75715e># 自定义文章信息显示格式</span>
+</span></span><span style=display:flex><span>  <span style=color:#f92672>article</span>:
+</span></span><span style=display:flex><span>    <span style=color:#f92672>showDate</span>: <span style=color:#66d9ef>true</span>
+</span></span><span style=display:flex><span>    <span style=color:#f92672>showAuthor</span>: <span style=color:#66d9ef>true</span>
+</span></span><span style=display:flex><span>    <span style=color:#f92672>showReadingTime</span>: <span style=color:#66d9ef>true</span>
+</span></span><span style=display:flex><span>    <span style=color:#f92672>showEstimatedReadingTime</span>: <span style=color:#66d9ef>true</span> <span style=color:#75715e># 显示估计阅读时间</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#f92672>menu</span>:
+</span></span><span style=display:flex><span>  <span style=color:#f92672>main</span>:
+</span></span><span style=display:flex><span>    - <span style=color:#f92672>name</span>: <span style=color:#ae81ff>Posts</span>
+</span></span><span style=display:flex><span>      <span style=color:#f92672>url</span>: <span style=color:#ae81ff>/posts/</span>
+</span></span><span style=display:flex><span>      <span style=color:#f92672>weight</span>: <span style=color:#ae81ff>1</span>
+</span></span><span style=display:flex><span>    - <span style=color:#f92672>name</span>: <span style=color:#ae81ff>Archive</span>
+</span></span><span style=display:flex><span>      <span style=color:#f92672>url</span>: <span style=color:#ae81ff>/archive/</span>
+</span></span><span style=display:flex><span>      <span style=color:#f92672>weight</span>: <span style=color:#ae81ff>2</span>
+</span></span><span style=display:flex><span>    - <span style=color:#f92672>name</span>: <span style=color:#ae81ff>Search</span>
+</span></span><span style=display:flex><span>      <span style=color:#f92672>url</span>: <span style=color:#ae81ff>/search/</span>
+</span></span><span style=display:flex><span>      <span style=color:#f92672>weight</span>: <span style=color:#ae81ff>3</span>
+</span></span><span style=display:flex><span>    - <span style=color:#f92672>name</span>: <span style=color:#ae81ff>Tags</span>
+</span></span><span style=display:flex><span>      <span style=color:#f92672>url</span>: <span style=color:#ae81ff>/tags/</span>
+</span></span><span style=display:flex><span>      <span style=color:#f92672>weight</span>: <span style=color:#ae81ff>4</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e># 输出设置</span>
+</span></span><span style=display:flex><span><span style=color:#f92672>outputs</span>:
+</span></span><span style=display:flex><span>  <span style=color:#f92672>home</span>:
+</span></span><span style=display:flex><span>    - <span style=color:#ae81ff>HTML</span>
+</span></span><span style=display:flex><span>    - <span style=color:#ae81ff>RSS</span>
+</span></span><span style=display:flex><span>    - <span style=color:#ae81ff>JSON</span> <span style=color:#75715e># 用于搜索功能</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e># 文章页面设置</span>
+</span></span><span style=display:flex><span><span style=color:#f92672>permalinks</span>:
+</span></span><span style=display:flex><span>  <span style=color:#f92672>posts</span>: <span style=color:#ae81ff>/:title/</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e># Markdown 渲染设置</span>
+</span></span><span style=display:flex><span><span style=color:#f92672>markup</span>:
+</span></span><span style=display:flex><span>  <span style=color:#f92672>goldmark</span>:
+</span></span><span style=display:flex><span>    <span style=color:#f92672>renderer</span>:
+</span></span><span style=display:flex><span>        <span style=color:#f92672>unsafe</span>: <span style=color:#66d9ef>true</span>
+</span></span></code></pre></div></div></div></p></li><li><p><strong>配置搜索和归档功能</strong></p></li></ol><p>为了确保搜索功能正常工作，创建 <code>content/search.md</code>：</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-markdown data-lang=markdown><span style=display:flex><span>---
+</span></span><span style=display:flex><span>title: &#34;Search&#34;
+</span></span><span style=display:flex><span>layout: &#34;search&#34;
+</span></span><span style=display:flex><span>---
+</span></span></code></pre></div><p>还需要创建 <code>content/archive.md</code>：</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-markdown data-lang=markdown><span style=display:flex><span>---
+</span></span><span style=display:flex><span>title: &#34;Archive&#34;
+</span></span><span style=display:flex><span>layout: &#34;archives&#34;
+</span></span><span style=display:flex><span>url: &#34;/archive/&#34;
+</span></span><span style=display:flex><span>summary: archives
+</span></span><span style=display:flex><span>---
+</span></span></code></pre></div><ol start=7><li><p><strong>自定义浏览器标签栏图标</strong></p><ol><li>选择你喜欢的图片，在 <a href=https://favicon.io/favicon-converter/>favicon.io</a> 网站上生成 favicon</li><li>将生成的文件下载并替换到 <code>static</code> 目录下, 结构如下：</li></ol><pre tabindex=0><code>    hugo-source/
+    ├── content/
+    ├── static/
+    │   ├── android-chrome-192x192.png  # Android Chrome 浏览器图标（中尺寸）
+    │   ├── android-chrome-512x512.png  # Android Chrome 浏览器图标（大尺寸）
+    │   ├── apple-touch-icon.png       # iOS/macOS 设备图标 (180x180)
+    │   ├── favicon-16x16.png          # 小尺寸网站图标
+    │   ├── favicon-32x32.png          # 标准网站图标
+    │   └── favicon.ico                # 基础网站图标（兼容性）
+    ...
+    └── hugo.yaml
+</code></pre></li><li><p><strong>创建第一篇文章</strong></p></li></ol><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span><span style=color:#75715e># 创建新文章</span>
+</span></span><span style=display:flex><span>hugo new posts/hello-world/index.md
+</span></span></code></pre></div><p>编辑 <code>content/posts/hello-world/index.md</code>:</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-markdown data-lang=markdown><span style=display:flex><span>---
+</span></span><span style=display:flex><span>title: &#34;Hello World&#34;
+</span></span><span style=display:flex><span>date: 2024-11-10
+</span></span><span style=display:flex><span>draft: false
+</span></span><span style=display:flex><span>tags: [&#34;test&#34;]
+</span></span><span style=display:flex><span>---
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>This is my first post!
+</span></span></code></pre></div><ol start=9><li><strong>设置部署工作流</strong></li></ol><p>在 <code>hugo-source</code> 仓库中创建文件 <code>.github/workflows/deploy.yaml</code>:<div class=collapse-wrapper><button class=collapse-button onclick='this.parentElement.classList.toggle("active")'>
+点击查看
+<span class=collapse-icon>▼</span></button><div class=collapse-content><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-yaml data-lang=yaml><span style=display:flex><span><span style=color:#f92672>name</span>: <span style=color:#ae81ff>Deploy Hugo site to Pages</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#f92672>on</span>:
+</span></span><span style=display:flex><span>  <span style=color:#f92672>push</span>:
+</span></span><span style=display:flex><span>    <span style=color:#f92672>branches</span>:
+</span></span><span style=display:flex><span>      - <span style=color:#ae81ff>main</span>
+</span></span><span style=display:flex><span>  <span style=color:#f92672>workflow_dispatch</span>:  <span style=color:#75715e># 允许手动触发</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e># 设置并发部署策略</span>
+</span></span><span style=display:flex><span><span style=color:#f92672>concurrency</span>:
+</span></span><span style=display:flex><span>  <span style=color:#f92672>group</span>: <span style=color:#e6db74>&#34;pages&#34;</span>
+</span></span><span style=display:flex><span>  <span style=color:#f92672>cancel-in-progress</span>: <span style=color:#66d9ef>false</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e># 默认使用 bash</span>
+</span></span><span style=display:flex><span><span style=color:#f92672>defaults</span>:
+</span></span><span style=display:flex><span>  <span style=color:#f92672>run</span>:
+</span></span><span style=display:flex><span>    <span style=color:#f92672>shell</span>: <span style=color:#ae81ff>bash</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#f92672>jobs</span>:
+</span></span><span style=display:flex><span>  <span style=color:#f92672>build-and-deploy</span>:
+</span></span><span style=display:flex><span>    <span style=color:#f92672>runs-on</span>: <span style=color:#ae81ff>ubuntu-latest</span>
+</span></span><span style=display:flex><span>    <span style=color:#f92672>env</span>:
+</span></span><span style=display:flex><span>      <span style=color:#f92672>HUGO_VERSION</span>: <span style=color:#ae81ff>0.138.0</span>  <span style=color:#75715e># 指定 Hugo 版本</span>
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    <span style=color:#f92672>steps</span>:
+</span></span><span style=display:flex><span>      <span style=color:#75715e># 安装 Hugo</span>
+</span></span><span style=display:flex><span>      - <span style=color:#f92672>name</span>: <span style=color:#ae81ff>Install Hugo CLI</span>
+</span></span><span style=display:flex><span>        <span style=color:#f92672>run</span>: |<span style=color:#e6db74>
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>          wget -O ${{ runner.temp }}/hugo.deb https://github.com/gohugoio/hugo/releases/download/v${HUGO_VERSION}/hugo_extended_${HUGO_VERSION}_linux-amd64.deb \
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>          &amp;&amp; sudo dpkg -i ${{ runner.temp }}/hugo.deb</span>          
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>      <span style=color:#75715e># 安装 Dart Sass（如果需要）</span>
+</span></span><span style=display:flex><span>      - <span style=color:#f92672>name</span>: <span style=color:#ae81ff>Install Dart Sass</span>
+</span></span><span style=display:flex><span>        <span style=color:#f92672>run</span>: <span style=color:#ae81ff>sudo snap install dart-sass</span>
+</span></span><span style=display:flex><span>      
+</span></span><span style=display:flex><span>      <span style=color:#75715e># 检出代码</span>
+</span></span><span style=display:flex><span>      - <span style=color:#f92672>name</span>: <span style=color:#ae81ff>Checkout</span>
+</span></span><span style=display:flex><span>        <span style=color:#f92672>uses</span>: <span style=color:#ae81ff>actions/checkout@v4</span>
+</span></span><span style=display:flex><span>        <span style=color:#f92672>with</span>:
+</span></span><span style=display:flex><span>          <span style=color:#f92672>submodules</span>: <span style=color:#ae81ff>recursive </span> <span style=color:#75715e># 获取子模块</span>
+</span></span><span style=display:flex><span>          <span style=color:#f92672>fetch-depth</span>: <span style=color:#ae81ff>0</span>        <span style=color:#75715e># 获取完整的 git 历史</span>
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>      <span style=color:#75715e># 安装 Node.js 依赖（如果需要）</span>
+</span></span><span style=display:flex><span>      - <span style=color:#f92672>name</span>: <span style=color:#ae81ff>Install Node.js dependencies</span>
+</span></span><span style=display:flex><span>        <span style=color:#f92672>run</span>: |<span style=color:#e6db74>
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>          if [[ -f package-lock.json || -f npm-shrinkwrap.json ]]; then
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>            npm ci
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>          fi</span>          
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>      <span style=color:#75715e># 构建 Hugo 站点</span>
+</span></span><span style=display:flex><span>      - <span style=color:#f92672>name</span>: <span style=color:#ae81ff>Build with Hugo</span>
+</span></span><span style=display:flex><span>        <span style=color:#f92672>env</span>:
+</span></span><span style=display:flex><span>          <span style=color:#f92672>HUGO_ENVIRONMENT</span>: <span style=color:#ae81ff>production</span>
+</span></span><span style=display:flex><span>          <span style=color:#f92672>TZ</span>: <span style=color:#ae81ff>Asia/Shanghai </span> <span style=color:#75715e># 设置时区</span>
+</span></span><span style=display:flex><span>        <span style=color:#f92672>run</span>: |<span style=color:#e6db74>
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>          hugo \
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>            --gc \
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>            --minify \
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>            --baseURL &#34;https://username.github.io/&#34;  # 替换为你的 URL</span>          
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span>      <span style=color:#75715e># 部署到外部仓库</span>
+</span></span><span style=display:flex><span>      - <span style=color:#f92672>name</span>: <span style=color:#ae81ff>Deploy</span>
+</span></span><span style=display:flex><span>        <span style=color:#f92672>uses</span>: <span style=color:#ae81ff>peaceiris/actions-gh-pages@v3</span>
+</span></span><span style=display:flex><span>        <span style=color:#f92672>with</span>:
+</span></span><span style=display:flex><span>          <span style=color:#f92672>deploy_key</span>: <span style=color:#ae81ff>${{ secrets.ACTIONS_DEPLOY_KEY }}</span>
+</span></span><span style=display:flex><span>          <span style=color:#f92672>external_repository</span>: <span style=color:#ae81ff>username/username.github.io </span> <span style=color:#75715e># 替换为你的外部仓库</span>
+</span></span><span style=display:flex><span>          <span style=color:#f92672>publish_branch</span>: <span style=color:#ae81ff>main</span>
+</span></span><span style=display:flex><span>          <span style=color:#f92672>publish_dir</span>: <span style=color:#ae81ff>./public</span>
+</span></span><span style=display:flex><span>          <span style=color:#f92672>commit_message</span>: <span style=color:#ae81ff>${{ github.event.head_commit.message }}</span>
+</span></span><span style=display:flex><span>          <span style=color:#f92672>user_name</span>: <span style=color:#e6db74>&#39;github-actions[bot]&#39;</span>
+</span></span><span style=display:flex><span>          <span style=color:#f92672>user_email</span>: <span style=color:#e6db74>&#39;github-actions[bot]@users.noreply.github.com&#39;</span>
+</span></span></code></pre></div></div></div></p><ol start=10><li><p><strong>折叠长代码块</strong></p><ol><li><p>在 <code>assets/css/extended/custom.css</code> 文件中添加以下代码：<div class=collapse-wrapper><button class=collapse-button onclick='this.parentElement.classList.toggle("active")'>
+点击查看
+<span class=collapse-icon>▼</span></button><div class=collapse-content><pre><code>```css
+/* 折叠代码块 */
+.collapse-wrapper {
+    margin: 1rem 0;
+}
+
+.collapse-button {
+    width: 100%;
+    padding: 0.5rem;
+    background-color: var(--border);
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    font-size: 0.9rem;
+}
+
+.collapse-button:hover {
+    background-color: var(--border-hover);
+}
+
+.collapse-content {
+    display: none;
+    padding: 1rem;
+    border: 1px solid var(--border);
+}
+
+.collapse-wrapper.active .collapse-content {
+    display: block;
+}
+
+/* 暗色主题适配 */
+[theme=&quot;dark&quot;] .collapse-button {
+    background-color: var(--entry);
+    color: var(--primary);
+}
+
+[theme=&quot;dark&quot;] .collapse-button:hover {
+    background-color: var(--border);
+} 
+
+/* 折叠代码块 结束 */
+```
+</code></pre></div></div></p></li><li><p>在 <code>layouts/shortcodes/collapsible.html</code> 文件中添加以下代码：</p></li></ol><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-html data-lang=html><span style=display:flex><span>{{ $_hugo_config := `{ &#34;version&#34;: 1 }` }}
+</span></span><span style=display:flex><span>&lt;<span style=color:#f92672>div</span> <span style=color:#a6e22e>class</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;collapse-wrapper&#34;</span>&gt;
+</span></span><span style=display:flex><span>    &lt;<span style=color:#f92672>button</span> <span style=color:#a6e22e>class</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;collapse-button&#34;</span> <span style=color:#a6e22e>onclick</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;this.parentElement.classList.toggle(&#39;active&#39;)&#34;</span>&gt;
+</span></span><span style=display:flex><span>        {{ with .Get &#34;summary&#34; }}{{ . }}{{ else }}点击展开{{ end }}
+</span></span><span style=display:flex><span>        &lt;<span style=color:#f92672>span</span> <span style=color:#a6e22e>class</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;collapse-icon&#34;</span>&gt;▼&lt;/<span style=color:#f92672>span</span>&gt;
+</span></span><span style=display:flex><span>    &lt;/<span style=color:#f92672>button</span>&gt;
+</span></span><span style=display:flex><span>    &lt;<span style=color:#f92672>div</span> <span style=color:#a6e22e>class</span><span style=color:#f92672>=</span><span style=color:#e6db74>&#34;collapse-content&#34;</span>&gt;
+</span></span><span style=display:flex><span>        {{ .Inner | markdownify }}
+</span></span><span style=display:flex><span>    &lt;/<span style=color:#f92672>div</span>&gt;
+</span></span><span style=display:flex><span>&lt;/<span style=color:#f92672>div</span>&gt;
+</span></span></code></pre></div><ol start=3><li>在写markdown时，使用如下代码包裹需要折叠的代码块。</li></ol><pre tabindex=0><code>{‎{&lt; collapsible summary=&#34;点击查看&#34; &gt;}}
+```python
+Long code block
+```
+{‎{&lt; /collapsible &gt;}}
+</code></pre></li><li><p><strong>设置部署密钥</strong></p><ol><li><strong>首先生成 SSH 密钥对</strong>：</li></ol><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span><span style=color:#75715e># 在本地终端执行</span>
+</span></span><span style=display:flex><span>ssh-keygen -t rsa -b <span style=color:#ae81ff>4096</span> -C <span style=color:#e6db74>&#34;your_email@example.com&#34;</span> -f gh-pages
+</span></span></code></pre></div><p>这会生成两个文件：</p><ul><li><code>gh-pages</code>（私钥）</li><li><code>gh-pages.pub</code>（公钥）</li></ul><ol start=2><li><strong>在私有仓库 (<code>hugo-source</code>) 添加私钥</strong>：</li></ol><ul><li>打开私有仓库的 Settings</li><li>点击左侧的 &ldquo;Secrets and variables&rdquo; -> &ldquo;Actions&rdquo;</li><li>点击 &ldquo;New repository secret&rdquo;</li><li>Name 填写：<code>ACTIONS_DEPLOY_KEY</code></li><li>Secret 填写：复制 <code>gh-pages</code> 文件的全部内容（私钥）</li><li>点击 &ldquo;Add secret&rdquo;</li></ul><ol start=3><li><strong>在公开仓库 (<code>username.github.io</code>) 添加公钥</strong>：</li></ol><ul><li>打开公开仓库的 Settings</li><li>点击左侧的 &ldquo;Deploy keys&rdquo;</li><li>点击 &ldquo;Add deploy key&rdquo;</li><li>Title 填写：<code>HUGO_DEPLOY_KEY</code>（或其他描述性名称）</li><li>Key 填写：复制 <code>gh-pages.pub</code> 文件的全部内容（公钥）</li><li>勾选 &ldquo;Allow write access&rdquo;</li><li>点击 &ldquo;Add key&rdquo;</li></ul><p>查看私钥/公钥内容的命令：</p><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span><span style=color:#75715e># 查看私钥内容（添加到 ACTIONS_DEPLOY_KEY）</span>
+</span></span><span style=display:flex><span>cat gh-pages
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e># 查看公钥内容（添加到 Deploy keys）</span>
+</span></span><span style=display:flex><span>cat gh-pages.pub
+</span></span></code></pre></div><p>设置完成后：</p><ul><li>工作流将使用这个密钥对来安全地将构建后的内容推送到公开仓库</li><li>私钥保存在私有仓库的 secrets 中，用于签名</li><li>公钥保存在公开仓库的 deploy keys 中，用于验证</li></ul><p>记得：</p><ol><li>密钥生成后要立即妥善保管，特别是私钥部分</li><li>确保将完整的密钥内容复制，包括开头的 <code>-----BEGIN...</code> 和结尾的 <code>-----END...</code></li><li>添加后可以删除本地的 <code>gh-pages</code> 和 <code>gh-pages.pub</code> 文件</li></ol><p>这样设置后，GitHub Actions 就能安全地将构建的内容部署到公开仓库了。</p></li><li><p><strong>初始化和推送源码仓库</strong></p></li></ol><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span><span style=color:#75715e># 在 hugo-source 目录下</span>
+</span></span><span style=display:flex><span>git add .
+</span></span><span style=display:flex><span>git commit -m <span style=color:#e6db74>&#34;Initial commit&#34;</span>
+</span></span><span style=display:flex><span><span style=color:#75715e># git branch -M main #(如果需要)</span>
+</span></span><span style=display:flex><span>git remote add origin git@github.com:username/hugo-source.git
+</span></span><span style=display:flex><span>git push -u origin main
+</span></span></code></pre></div><ol start=13><li><strong>完成设置</strong></li></ol><ul><li>等待 GitHub Actions 完成部署</li><li>访问 <a href=https://username.github.io>https://username.github.io</a> 查看你的网站</li></ul><h2 id=维护网站的工作流程>维护网站的工作流程<a hidden class=anchor aria-hidden=true href=#维护网站的工作流程>#</a></h2><ol><li>在本地 <code>hugo-source</code> 目录中编写新文章：</li></ol><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span>hugo new posts/new-post/index.md
+</span></span></code></pre></div><ol start=2><li><p>编辑文章内容, 如果使用cursor，可以直接在 <code>content/posts/new-post/index.md</code> 文件中复制粘贴图片，cursor会自动将图片保存到 <code>content/posts/new-post/</code>下。</p></li><li><p>本地预览（可选）：</p></li></ol><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span>hugo server -D <span style=color:#75715e># -D 参数用于启用草稿模式，即 draft 为 true 的文章也会被预览</span>
+</span></span><span style=display:flex><span><span style=color:#75715e># 如果文章设置的 draft 为 false，则需要手动删除 -D 参数</span>
+</span></span></code></pre></div><ol start=4><li>提交和推送更改：</li></ol><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span>git add .
+</span></span><span style=display:flex><span>git commit -m <span style=color:#e6db74>&#34;Add new post&#34;</span>
+</span></span><span style=display:flex><span>git push origin main
+</span></span></code></pre></div><ol start=5><li>GitHub Actions 会自动部署更新后的内容到你的网站</li></ol><h2 id=注意事项>注意事项<a hidden class=anchor aria-hidden=true href=#注意事项>#</a></h2><ol><li>将 <code>username</code> 替换为你的 GitHub 用户名</li><li>确保在 GitHub 上正确配置了 SSH 密钥</li><li>私有仓库中的 <code>public</code> 目录应该被添加到 <code>.gitignore</code> 中</li><li>如果使用自定义域名，需要在 GitHub Pages 设置中配置，并在 <code>static</code> 目录下添加 <code>CNAME</code> 文件</li><li>为了保护隐私，建议使用 ExifTool 工具清除图片中的元数据（metadata）。这些元数据可能包含设备信息、拍摄位置等敏感信息（<a href=https://stackoverflow.com/questions/66192531/exiftool-how-to-remove-all-metadata-from-all-files-possible-inside-a-folder-an>参考链接</a>）：<div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-bash data-lang=bash><span style=display:flex><span><span style=color:#75715e># 安装 ExifTool</span>
+</span></span><span style=display:flex><span>brew install exiftool
+</span></span><span style=display:flex><span>
+</span></span><span style=display:flex><span><span style=color:#75715e># 清除指定目录下所有图片的元数据（会直接覆盖原文件）</span>
+</span></span><span style=display:flex><span>exiftool -a -all:all<span style=color:#f92672>=</span> -r 图片目录路径 -overwrite_original
+</span></span></code></pre></div></li></ol><h2 id=总结>总结<a hidden class=anchor aria-hidden=true href=#总结>#</a></h2><p>这样设置后，你就可以在私有仓库中管理网站源码，而生成的静态文件会自动部署到公开仓库中展示。这种方式既保护了源码，又能享受 GitHub Pages 的免费托管服务。</p></div><footer class=post-footer><ul class=post-tags><li><a href=https://shenghairong.github.io/tags/tutorial/>Tutorial</a></li></ul><nav class=paginav><a class=next href=https://shenghairong.github.io/hello-world/><span class=title>Next »</span><br><span>Hello World</span></a></nav></footer></article></main><footer class=footer><span>&copy; 2024 <a href=https://shenghairong.github.io/>Shawn's Blog</a></span> ·
+<span>Powered by
+<a href=https://gohugo.io/ rel="noopener noreferrer" target=_blank>Hugo</a> &
+        <a href=https://github.com/adityatelange/hugo-PaperMod/ rel=noopener target=_blank>PaperMod</a></span></footer><a href=#top aria-label="go to top" title="Go to Top (Alt + G)" class=top-link id=top-link accesskey=g><svg viewBox="0 0 12 6" fill="currentcolor"><path d="M12 6H0l6-6z"/></svg>
+</a><script>let menu=document.getElementById("menu");menu&&(menu.scrollLeft=localStorage.getItem("menu-scroll-position"),menu.onscroll=function(){localStorage.setItem("menu-scroll-position",menu.scrollLeft)}),document.querySelectorAll('a[href^="#"]').forEach(e=>{e.addEventListener("click",function(e){e.preventDefault();var t=this.getAttribute("href").substr(1);window.matchMedia("(prefers-reduced-motion: reduce)").matches?document.querySelector(`[id='${decodeURIComponent(t)}']`).scrollIntoView():document.querySelector(`[id='${decodeURIComponent(t)}']`).scrollIntoView({behavior:"smooth"}),t==="top"?history.replaceState(null,null," "):history.pushState(null,null,`#${t}`)})})</script><script>var mybutton=document.getElementById("top-link");window.onscroll=function(){document.body.scrollTop>800||document.documentElement.scrollTop>800?(mybutton.style.visibility="visible",mybutton.style.opacity="1"):(mybutton.style.visibility="hidden",mybutton.style.opacity="0")}</script><script>document.getElementById("theme-toggle").addEventListener("click",()=>{document.body.className.includes("dark")?(document.body.classList.remove("dark"),localStorage.setItem("pref-theme","light")):(document.body.classList.add("dark"),localStorage.setItem("pref-theme","dark"))})</script><script>document.querySelectorAll("pre > code").forEach(e=>{const n=e.parentNode.parentNode,t=document.createElement("button");t.classList.add("copy-code"),t.innerHTML="copy";function s(){t.innerHTML="copied!",setTimeout(()=>{t.innerHTML="copy"},2e3)}t.addEventListener("click",t=>{if("clipboard"in navigator){navigator.clipboard.writeText(e.textContent),s();return}const n=document.createRange();n.selectNodeContents(e);const o=window.getSelection();o.removeAllRanges(),o.addRange(n);try{document.execCommand("copy"),s()}catch{}o.removeRange(n)}),n.classList.contains("highlight")?n.appendChild(t):n.parentNode.firstChild==n||(e.parentNode.parentNode.parentNode.parentNode.parentNode.nodeName=="TABLE"?e.parentNode.parentNode.parentNode.parentNode.parentNode.appendChild(t):e.parentNode.appendChild(t))})</script></body></html>
