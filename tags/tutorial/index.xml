@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>Tutorial on Shawn's Blog</title><link>https://shenghairong.github.io/tags/tutorial/</link><description>Recent content in Tutorial on Shawn's Blog</description><generator>Hugo -- 0.138.0</generator><language>en-us</language><lastBuildDate>Mon, 11 Nov 2024 11:44:57 +0800</lastBuildDate><atom:link href="https://shenghairong.github.io/tags/tutorial/index.xml" rel="self" type="application/rss+xml"/><item><title>通过CF Worker代理第三方api在Cursor中使用Claude</title><link>https://shenghairong.github.io/posts/2024-11-11-oneapi_cursor/</link><pubDate>Mon, 11 Nov 2024 11:44:57 +0800</pubDate><guid>https://shenghairong.github.io/posts/2024-11-11-oneapi_cursor/</guid><description>&lt;h1 id="在-cursor-中使用-cloudflare-worker-代理以第三方api的方式访问-claude-教程">在 Cursor 中使用 Cloudflare Worker 代理以第三方api的方式访问 Claude 教程&lt;/h1>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>Tutorial on Shawn's Blog</title><link>https://shenghairong.github.io/tags/tutorial/</link><description>Recent content in Tutorial on Shawn's Blog</description><generator>Hugo -- 0.138.0</generator><language>en-us</language><lastBuildDate>Mon, 11 Nov 2024 11:44:57 +0800</lastBuildDate><atom:link href="https://shenghairong.github.io/tags/tutorial/index.xml" rel="self" type="application/rss+xml"/><item><title>通过CF Worker代理第三方api在Cursor中使用Claude</title><link>https://shenghairong.github.io/posts/2024-11-11-oneapi_cursor/</link><pubDate>Mon, 11 Nov 2024 11:44:57 +0800</pubDate><guid>https://shenghairong.github.io/posts/2024-11-11-oneapi_cursor/</guid><description>&lt;h2 id="前言">前言&lt;/h2>
 &lt;p>本教程将指导你如何通过 Cloudflare Worker 在 Cursor 中以第三方api的方式访问 Claude 和 Deepseek 模型。通过覆盖 OpenAI 的 URL 地址，我们可以使用 第三方api 来访问这些模型。&lt;/p>
 &lt;h2 id="功能特点">功能特点&lt;/h2>
 &lt;ol>
@@ -19,7 +19,16 @@
 &lt;h3 id="2-配置环境变量">2. 配置环境变量&lt;/h3>
 &lt;ol>
 &lt;li>
-&lt;p>在 Cloudflare Dashboard 中：&lt;/p></description></item><item><title>免费使用 GitHub 私有仓库部署网站</title><link>https://shenghairong.github.io/posts/2024-11-10-hugo-gh_pages/</link><pubDate>Sun, 10 Nov 2024 18:19:36 +0800</pubDate><guid>https://shenghairong.github.io/posts/2024-11-10-hugo-gh_pages/</guid><description>&lt;h2 id="前言">前言&lt;/h2>
+&lt;p>在 Cloudflare Dashboard 中：&lt;/p>
+&lt;ul>
+&lt;li>进入你的 Worker 的设置页面&lt;/li>
+&lt;li>点击 &amp;ldquo;Settings&amp;rdquo; 选项卡&lt;/li>
+&lt;li>找到 &amp;ldquo;Variables&amp;rdquo; 部分&lt;/li>
+&lt;li>点击 &amp;ldquo;Add variable&amp;rdquo; 按钮&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>添加以下环境变量：&lt;/p></description></item><item><title>免费使用 GitHub 私有仓库部署网站</title><link>https://shenghairong.github.io/posts/2024-11-10-hugo-gh_pages/</link><pubDate>Sun, 10 Nov 2024 18:19:36 +0800</pubDate><guid>https://shenghairong.github.io/posts/2024-11-10-hugo-gh_pages/</guid><description>&lt;h2 id="前言">前言&lt;/h2>
 &lt;p>本教程详细说明如何使用 Hugo + GitHub Pages + Paper Mod 主题来部署网站，通过私有仓库管理源码，公开仓库发布网站。&lt;/p>
 &lt;p>最终仓库结构如下所示：&lt;/p>
 &lt;p>私有仓库 (hugo-source)&lt;/p>
@@ -87,12 +96,10 @@
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e"># 基础设置&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#f92672">enableGitInfo&lt;/span>: &lt;span style="color:#66d9ef">false&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#f92672">enableEmoji&lt;/span>: &lt;span style="color:#66d9ef">true&lt;/span> &lt;span style="color:#75715e"># 支持 emoji 显示&lt;/span>
-&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#f92672">paginate&lt;/span>: &lt;span style="color:#ae81ff">5&lt;/span> &lt;span style="color:#75715e"># 一页显示5篇文章&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#f92672">paginate&lt;/span>: &lt;span style="color:#ae81ff">10&lt;/span> &lt;span style="color:#75715e"># 一页显示10篇文章&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e"># params底下的应该是PaperMod的设置&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#f92672">params&lt;/span>:
-&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">profileMode&lt;/span>:
-&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">enabled&lt;/span>: &lt;span style="color:#66d9ef">false&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">homeInfoParams&lt;/span>:
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">Title&lt;/span>: &lt;span style="color:#e6db74">&amp;#34;👋 Welcome to My Blog&amp;#34;&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">Content&lt;/span>: &lt;span style="color:#e6db74">&amp;#34;Hi, this is my blog.&amp;#34;&lt;/span>
@@ -100,25 +107,25 @@
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">socialIcons&lt;/span>:
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> - &lt;span style="color:#f92672">name&lt;/span>: &lt;span style="color:#e6db74">&amp;#34;rss&amp;#34;&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">url&lt;/span>: &lt;span style="color:#e6db74">&amp;#34;/index.xml&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> - &lt;span style="color:#f92672">name&lt;/span>: &lt;span style="color:#e6db74">&amp;#34;email&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">url&lt;/span>: &lt;span style="color:#e6db74">&amp;#34;your_email@example.com&amp;#34;&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> - &lt;span style="color:#f92672">name&lt;/span>: &lt;span style="color:#e6db74">&amp;#34;github&amp;#34;&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">url&lt;/span>: &lt;span style="color:#e6db74">&amp;#34;https://github.com/username&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#75715e"># - name: &amp;#34;twitter&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#75715e"># url: &amp;#34;YOUR_TWITTER_URL&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#75715e"># 首页显示最新文章&lt;/span>
-&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">mainSections&lt;/span>: [&lt;span style="color:#e6db74">&amp;#34;posts&amp;#34;&lt;/span>]
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">label&lt;/span>:
-&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">text&lt;/span>: &lt;span style="color:#e6db74">&amp;#34;My Blog&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">icon&lt;/span>: &lt;span style="color:#ae81ff">/apple-touch-icon.png &lt;/span> &lt;span style="color:#75715e"># 导航栏显示的图标&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">text&lt;/span>: &lt;span style="color:#e6db74">&amp;#34;User&amp;#39;s Blog&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">icon&lt;/span>: &lt;span style="color:#ae81ff">/favicon.ico &lt;/span> &lt;span style="color:#75715e"># 导航栏显示的图标&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">iconHeight&lt;/span>: &lt;span style="color:#ae81ff">35&lt;/span> &lt;span style="color:#75715e"># 控制导航栏图标大小&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">assets&lt;/span>:
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">disableHLJS&lt;/span>: &lt;span style="color:#66d9ef">true&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">favicon&lt;/span>: &lt;span style="color:#e6db74">&amp;#34;/favicon.ico&amp;#34;&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">favicon16x16&lt;/span>: &lt;span style="color:#e6db74">&amp;#34;/favicon-16x16.png&amp;#34;&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">favicon32x32&lt;/span>: &lt;span style="color:#e6db74">&amp;#34;/favicon-32x32.png&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">apple_touch_icon&lt;/span>: &lt;span style="color:#e6db74">&amp;#34;/apple-touch-icon.png&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">android_chrome_192&lt;/span>: &lt;span style="color:#e6db74">&amp;#34;/android-chrome-192x192.png&amp;#34;&lt;/span>
-&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">android_chrome_512&lt;/span>: &lt;span style="color:#e6db74">&amp;#34;/android-chrome-512x512.png&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#75715e"># apple_touch_icon: &amp;#34;/apple-touch-icon.png&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#75715e"># android_chrome_192: &amp;#34;/android-chrome-192x192.png&amp;#34;&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#75715e"># android_chrome_512: &amp;#34;/android-chrome-512x512.png&amp;#34;&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">env&lt;/span>: &lt;span style="color:#ae81ff">production&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">defaultTheme&lt;/span>: &lt;span style="color:#ae81ff">auto&lt;/span>
@@ -126,20 +133,12 @@
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">ShowRssButtonInSectionTermList&lt;/span>: &lt;span style="color:#66d9ef">true&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">ShowToc&lt;/span>: &lt;span style="color:#66d9ef">true&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#75715e"># 文章设置&lt;/span>
-&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">ShowReadingTime&lt;/span>: &lt;span style="color:#66d9ef">true&lt;/span> &lt;span style="color:#75715e"># 显示阅读时间&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">ShowReadingTime&lt;/span>: &lt;span style="color:#66d9ef">false&lt;/span> &lt;span style="color:#75715e"># 显示阅读时间&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">ShowPostNavLinks&lt;/span>: &lt;span style="color:#66d9ef">true&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">ShowBreadCrumbs&lt;/span>: &lt;span style="color:#66d9ef">true&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">ShowCodeCopyButtons&lt;/span>: &lt;span style="color:#66d9ef">true&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">ShowWordCount&lt;/span>: &lt;span style="color:#66d9ef">true&lt;/span> &lt;span style="color:#75715e"># 显示字数统计&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">ShowAuthor&lt;/span>: &lt;span style="color:#66d9ef">true&lt;/span> &lt;span style="color:#75715e"># 显示作者&lt;/span>
-&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">ShowFavicon&lt;/span>: &lt;span style="color:#66d9ef">true&lt;/span> &lt;span style="color:#75715e"># 显示 favicon&lt;/span>
-&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
-&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#75715e"># 自定义文章信息显示格式&lt;/span>
-&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">article&lt;/span>:
-&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">showDate&lt;/span>: &lt;span style="color:#66d9ef">true&lt;/span>
-&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">showAuthor&lt;/span>: &lt;span style="color:#66d9ef">true&lt;/span>
-&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">showReadingTime&lt;/span>: &lt;span style="color:#66d9ef">true&lt;/span>
-&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">showEstimatedReadingTime&lt;/span>: &lt;span style="color:#66d9ef">true&lt;/span> &lt;span style="color:#75715e"># 显示估计阅读时间&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#f92672">menu&lt;/span>:
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">main&lt;/span>:
@@ -164,6 +163,7 @@
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> - &lt;span style="color:#ae81ff">JSON&lt;/span> &lt;span style="color:#75715e"># 用于搜索功能&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">section&lt;/span>:
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> - &lt;span style="color:#ae81ff">HTML&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e"># 文章页面设置&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#f92672">permalinks&lt;/span>:
