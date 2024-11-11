@@ -50,14 +50,10 @@
 │ └── index.html
 └── ...
 &lt;/code>&lt;/pre>&lt;h2 id="步骤">步骤&lt;/h2>
-&lt;ol>
-&lt;li>&lt;strong>创建两个 GitHub 仓库&lt;/strong>&lt;/li>
-&lt;/ol>
+&lt;h3 id="1-创建两个-github-仓库">1. &lt;strong>创建两个 GitHub 仓库&lt;/strong>&lt;/h3>
 &lt;pre tabindex="0">&lt;code>- 私有仓库：hugo-source (用于存放源码)
 - 公开仓库：username.github.io (用于发布网站)
-&lt;/code>&lt;/pre>&lt;ol start="2">
-&lt;li>&lt;strong>安装必要工具&lt;/strong>&lt;/li>
-&lt;/ol>
+&lt;/code>&lt;/pre>&lt;h3 id="2-安装必要工具">2. &lt;strong>安装必要工具&lt;/strong>&lt;/h3>
 &lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-bash" data-lang="bash">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e"># 安装 Hugo (以 Ubuntu 为例)&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e"># sudo apt install hugo&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e"># 安装 Hugo （以 Mac 为例）&lt;/span>
@@ -65,23 +61,17 @@
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e"># 验证安装&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>hugo version
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;ol start="3">
-&lt;li>&lt;strong>创建新的 Hugo 站点&lt;/strong>&lt;/li>
-&lt;/ol>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h3 id="3-创建新的-hugo-站点">3. &lt;strong>创建新的 Hugo 站点&lt;/strong>&lt;/h3>
 &lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-bash" data-lang="bash">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e"># 创建新站点, --format yaml 指定hugo 配置文件使用 yaml 格式，默认是toml格式&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>hugo new site /Users/yourname/Documents/hugo-source --format yaml
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>cd /Users/yourname/Documents/hugo-source
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e"># 初始化 git 仓库&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>git init
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;ol start="4">
-&lt;li>&lt;a href="https://github.com/adityatelange/hugo-PaperMod/wiki/Installation">&lt;strong>安装 PaperMod 主题&lt;/strong>&lt;/a>&lt;/li>
-&lt;/ol>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h3 id="4-安装-papermod-主题httpsgithubcomadityatelangehugo-papermodwikiinstallation">4. &lt;a href="https://github.com/adityatelange/hugo-PaperMod/wiki/Installation">&lt;strong>安装 PaperMod 主题&lt;/strong>&lt;/a>&lt;/h3>
 &lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-bash" data-lang="bash">&lt;span style="display:flex;">&lt;span>git submodule add --depth&lt;span style="color:#f92672">=&lt;/span>&lt;span style="color:#ae81ff">1&lt;/span> https://github.com/adityatelange/hugo-PaperMod.git themes/PaperMod
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>git submodule update --init --recursive &lt;span style="color:#75715e"># needed when you reclone your repo (submodules may not get cloned automatically)&lt;/span>
-&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;ol start="5">
-&lt;li>
-&lt;p>&lt;strong>配置 hugo.yaml&lt;/strong>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h3 id="5-配置-hugoyaml">5. &lt;strong>配置 hugo.yaml&lt;/strong>&lt;/h3>
 &lt;div class="collapse-wrapper">
 &lt;button class="collapse-button" onclick="this.parentElement.classList.toggle('active')">
 点击查看
@@ -176,4 +166,6 @@
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span> &lt;span style="color:#f92672">unsafe&lt;/span>: &lt;span style="color:#66d9ef">true&lt;/span>
 &lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>
 &lt;/div>
-&lt;/div> &lt;/p></description></item></channel></rss>
+&lt;/div>
+&lt;h3 id="6-配置搜索和归档功能">6. &lt;strong>配置搜索和归档功能&lt;/strong>&lt;/h3>
+&lt;p>为了确保搜索功能正常工作，创建 &lt;code>content/search.md&lt;/code>：&lt;/p></description></item></channel></rss>
