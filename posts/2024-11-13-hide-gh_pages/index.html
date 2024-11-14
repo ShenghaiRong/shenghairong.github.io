@@ -1,0 +1,1280 @@
+<!doctype html><html lang=en dir=auto><head><meta charset=utf-8><meta http-equiv=X-UA-Compatible content="IE=edge"><meta name=viewport content="width=device-width,initial-scale=1,shrink-to-fit=no"><meta name=robots content="index, follow"><title>隐藏真实的xxx.github.io | Shawn's Blog</title>
+<meta name=keywords content="tutorial,website"><meta name=description content="前言
+在免费使用 GitHub 私有仓库部署网站一文介绍了如何部署github pages，并实现了自定义域名的配置。本文介绍另一种自定义域名来访问github pages的方法， 特点是：
+
+访客无法通过user.me 追踪到真实的user.github.io
+通过cloudflare worker来实现 user.me 指向 user.github.io
+
+整个访问流程如下：
+用户访问 user.me
+↓
+Cloudflare DNS (指向 Worker)
+↓
+Worker 处理请求 (隐藏源站)
+↓
+Worker 访问 user.github.io
+↓
+GitHub Pages 返回内容
+这种方案的优势：
+
+安全性更高：完全隐藏GitHub Pages源站
+配置简单：无需复杂的DNS设置
+更少出错：避免DNS解析冲突
+维护方便：集中化管理
+
+
+注意：使用这种方法时，GitHub Pages只需保持默认的xxx.github.io域名即可，无需配置CNAME文件。
+
+具体实现
+1. 创建cf worker
+首先创建一个名为hide-ghpage的Worker，
+在设置中添加环境变量：
+
+GITHUB_PAGES 填写 xxx.github.io
+CUSTOM_DOMAIN 填写 user.me
+WWW_DOMAIN 填写 www.user.me
+WORKER_DOMAIN 填写 hide-ghpage.user.workers.dev
+
+然后编辑代码如下：
+
+
+    
+        点击查看
+        ▼
+    
+    
+        function encodePathProperly(path) {
+    // 先解码以防重复编码
+    const decodedPath = decodeURIComponent(path);
+    
+    // 替换特殊字符,之前被这个坑惨了。由于网页中包含邮件地址，特殊字符（如 @）在 URL 中无法正确处理，一直显示404.
+    return decodedPath
+        .split('/')
+        .map(segment => 
+            segment
+                .replace(/@/g, '%40')  // 替换@
+                .replace(/#/g, '%23')
+                .replace(/\?/g, '%3F')
+                .replace(/\[/g, '%5B')
+                .replace(/\]/g, '%5D')
+                .replace(/=/g, '%3D')
+                .replace(/&/g, '%26')
+        )
+        .join('/');
+ }
+ 
+ function initializeConfig(env) {
+    console.log('Initializing with env vars:', {
+        GITHUB_PAGES: env.GITHUB_PAGES,
+        CUSTOM_DOMAIN: env.CUSTOM_DOMAIN,
+        WWW_DOMAIN: env.WWW_DOMAIN,
+        WORKER_DOMAIN: env.WORKER_DOMAIN
+    });
+ 
+    const DOMAINS = {
+        GITHUB: env.GITHUB_PAGES,
+        CUSTOM: env.CUSTOM_DOMAIN,
+        WWW: env.WWW_DOMAIN,
+        WORKER: env.WORKER_DOMAIN
+    };
+ 
+    return {
+        domains: DOMAINS,
+        githubPages: DOMAINS.GITHUB,
+        allowedDomains: [DOMAINS.CUSTOM, DOMAINS.WWW, DOMAINS.WORKER],
+        sensitiveHeaders: [
+            'server',
+            'x-powered-by',
+            'x-github-request-id',
+            'x-fastly',
+            'x-proxy-cache',
+            'via',
+            'x-served-by',
+            'x-cache',
+            'x-cache-hits',
+            'x-timer',
+            'x-fastly-request-id',
+            'x-request-id',
+            'x-runtime',
+            'x-robots-tag',
+            'alt-svc',
+            'x-github',
+            'x-origin-cache',
+            'x-content-type-options'
+        ],
+        customHeaders: {
+            'server': 'cloudflare',
+            'X-Frame-Options': 'SAMEORIGIN',
+            'X-Content-Type-Options': 'nosniff',
+            'Referrer-Policy': 'strict-origin-when-cross-origin',
+            'Permissions-Policy': 'interest-cohort=()',
+            'Content-Security-Policy': &#34;default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';&#34;,
+            'X-Powered-By': 'Cloudflare'
+        },
+        debug: true
+    };
+ }
+ 
+ async function logError(error, request, extra = {}) {
+    console.error('Error:', {
+        message: error.message,
+        stack: error.stack,
+        url: request.url,
+        method: request.method,
+        ...extra
+    });
+ }
+ 
+ async function handleRequest(request, env) {
+    const config = initializeConfig({
+        GITHUB_PAGES: env.GITHUB_PAGES,
+        CUSTOM_DOMAIN: env.CUSTOM_DOMAIN,
+        WWW_DOMAIN: env.WWW_DOMAIN,
+        WORKER_DOMAIN: env.WORKER_DOMAIN
+    });
+    const { domains } = config;
+    
+    try {
+        const url = new URL(request.url);
+        const currentDomain = url.hostname;
+ 
+        // URL 编码处理
+        const encodedPath = encodePathProperly(url.pathname);
+        console.log('URL encoding:', {
+            originalPath: url.pathname,
+            encodedPath: encodedPath
+        });
+ 
+        // 详细的请求日志
+        console.log('Request details:', {
+            url: url.toString(),
+            domain: currentDomain,
+            path: encodedPath,
+            allowedDomains: config.allowedDomains,
+            method: request.method,
+            headers: Object.fromEntries(request.headers)
+        });
+ 
+        // www 重定向到主域名
+        if (currentDomain === domains.WWW) {
+            const newUrl = `https://${domains.CUSTOM}${encodedPath}${url.search}`;
+            console.log('Redirecting www to non-www:', {
+                from: url.toString(),
+                to: newUrl
+            });
+            
+            return new Response(null, {
+                status: 301,
+                headers: {
+                    'Location': newUrl,
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Pragma': 'no-cache',
+                    'Expires': '0',
+                    'server': 'cloudflare'
+                }
+            });
+        }
+ 
+        // 验证域名
+        if (!config.allowedDomains.includes(currentDomain)) {
+            console.warn('Invalid domain access:', {
+                domain: currentDomain,
+                allowedDomains: config.allowedDomains
+            });
+            return new Response('Domain not allowed', { status: 403 });
+        }
+ 
+        // 构建 GitHub URL
+        const githubUrl = `https://${config.githubPages}${encodedPath}${url.search}`;
+        
+        console.log('Proxying to GitHub:', {
+            from: url.toString(),
+            to: githubUrl
+        });
+ 
+        // 获取文件扩展名
+        const ext = encodedPath.split('.').pop().toLowerCase();
+        const isAsset = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'css', 'js', 'svg', 'ico', 'woff', 'woff2', 'ttf'].includes(ext);
+ 
+        // 处理请求头
+        let newHeaders = new Headers(request.headers);
+        
+        // 清理敏感请求头
+        ['referer', 'origin', 'x-real-ip', 'cf-connecting-ip', 'x-forwarded-for', 'x-forwarded-proto', 'cookie'].forEach(header => {
+            newHeaders.delete(header);
+        });
+ 
+        // 设置新的请求头
+        newHeaders.set('Host', config.githubPages);
+        newHeaders.set('Accept-Encoding', 'gzip, deflate, br');
+        newHeaders.set('User-Agent', request.headers.get('User-Agent') || 'Cloudflare Worker');
+ 
+        // 创建 GitHub 请求
+        const githubRequest = new Request(githubUrl, {
+            method: request.method,
+            headers: newHeaders,
+            redirect: isAsset ? 'follow' : 'manual',
+            cf: {
+                cacheEverything: false,
+                cacheTtl: isAsset ? 86400 : 0,
+                timeout: 30000
+            }
+        });
+ 
+        // 发送请求到 GitHub Pages
+        let response = await fetch(githubRequest);
+        
+        console.log('GitHub response:', {
+            status: response.status,
+            statusText: response.statusText,
+            headers: Object.fromEntries(response.headers),
+            url: githubUrl
+        });
+ 
+        // 如果是 404，增加调试日志
+        if (response.status === 404) {
+            console.log('404 Error details:', {
+                githubUrl,
+                originalUrl: request.url,
+                headers: Object.fromEntries(response.headers),
+                domain: currentDomain,
+                githubPages: config.githubPages
+            });
+ 
+            // 尝试直接访问 GitHub Pages
+            try {
+                const testResponse = await fetch(`https://${config.githubPages}${encodedPath}`);
+                console.log('Direct GitHub test:', {
+                    status: testResponse.status,
+                    headers: Object.fromEntries(testResponse.headers)
+                });
+            } catch (error) {
+                console.error('Direct GitHub test failed:', error);
+            }
+        }
+ 
+        // 处理资源文件
+        if (isAsset) {
+            let newResponse = new Response(response.body, {
+                status: response.status,
+                statusText: response.statusText,
+                headers: new Headers(response.headers)
+            });
+ 
+            const allowedHeaders = [
+                'content-type',
+                'content-length',
+                'cache-control',
+                'content-encoding',
+                'etag',
+                'last-modified'
+            ];
+ 
+            for (const key of [...newResponse.headers.keys()]) {
+                if (!allowedHeaders.includes(key.toLowerCase())) {
+                    newResponse.headers.delete(key);
+                }
+            }
+ 
+            if (response.ok) {
+                newResponse.headers.set('Cache-Control', 'public, max-age=31536000');
+            }
+            return newResponse;
+        }
+ 
+        // 处理重定向
+        if ([301, 302, 307, 308].includes(response.status)) {
+            const location = response.headers.get('Location');
+            
+            console.log('Handling redirect:', {
+                from: url.toString(),
+                location: location
+            });
+ 
+            if (location) {
+                const redirectUrl = new URL(location.startsWith('http') ? location : `https://${config.githubPages}${location}`);
+                const newLocation = `https://${currentDomain}${redirectUrl.pathname}${redirectUrl.search}`;
+                
+                console.log('New redirect location:', newLocation);
+ 
+                return new Response(null, {
+                    status: response.status,
+                    headers: {
+                        'Location': newLocation,
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Pragma': 'no-cache',
+                        'Expires': '0',
+                        'server': 'cloudflare'
+                    }
+                });
+            }
+        }
+ 
+        // 读取响应体
+        let body = await response.text();
+ 
+        // 替换规则
+        const replacements = [
+            [new RegExp(`https?://${config.githubPages}`, 'g'), `https://${currentDomain}`],
+            [`${config.githubPages}`, currentDomain],
+            [/href=&#34;\//g, `href=&#34;https://${currentDomain}/`],
+            [/src=&#34;\//g, `src=&#34;https://${currentDomain}/`],
+            [/src=&#34;([^&#34;]+)&#34;/g, (match, p1) => {
+                if (p1.startsWith('http')) {
+                    return match.replace(config.githubPages, currentDomain);
+                } else if (p1.startsWith('/')) {
+                    return `src=&#34;https://${currentDomain}${p1}&#34;`;
+                }
+                return match;
+            }],
+            [/srcset=&#34;([^&#34;]+)&#34;/g, (match, p1) => {
+                return `srcset=&#34;${p1.split(',').map(src => {
+                    const [url, size] = src.trim().split(' ');
+                    if (url.startsWith('http')) {
+                        return `${url.replace(config.githubPages, currentDomain)} ${size || ''}`;
+                    } else if (url.startsWith('/')) {
+                        return `https://${currentDomain}${url} ${size || ''}`;
+                    }
+                    return `${url} ${size || ''}`;
+                }).join(', ')}&#34;`;
+            }],
+            [/<meta[^>]*?content=&#34;[^&#34;]*?github\.io[^&#34;]*?&#34;[^>]*?>/g, (match) => {
+                return match.replace(config.githubPages, currentDomain);
+            }],
+            [/<link[^>]*?rel=&#34;canonical&#34;[^>]*?href=&#34;[^&#34;]*?&#34;[^>]*?>/g, (match) => {
+                return match.replace(config.githubPages, currentDomain);
+            }],
+            [/<script type=&#34;application\/ld\+json&#34;>[^<]*?<\/script>/g, (match) => {
+                return match.replace(config.githubPages, currentDomain);
+            }]
+        ];
+ 
+        // 应用替换规则
+        replacements.forEach(([pattern, replacement]) => {
+            body = body.replace(pattern, replacement);
+        });
+ 
+        // 创建最终响应
+        let newResponse = new Response(body, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: new Headers({
+                'Content-Type': response.headers.get('Content-Type') || 'text/html;charset=UTF-8',
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
+            })
+        });
+ 
+        // 添加安全头部
+        config.sensitiveHeaders.forEach(header => {
+            newResponse.headers.delete(header);
+        });
+ 
+        Object.entries(config.customHeaders).forEach(([key, value]) => {
+            newResponse.headers.set(key, value);
+        });
+ 
+        return newResponse;
+ 
+    } catch (err) {
+        await logError(err, request);
+        return new Response(`Error: ${err.message}`, { 
+            status: 500,
+            headers: {
+                'Content-Type': 'text/plain',
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0',
+                'server': 'cloudflare'
+            }
+        });
+    }
+ }
+ 
+ export default {
+    async fetch(request, env, ctx) {
+        // 记录环境变量状态
+        console.log('Environment variables:', {
+            GITHUB_PAGES: env.GITHUB_PAGES,
+            CUSTOM_DOMAIN: env.CUSTOM_DOMAIN,
+            WWW_DOMAIN: env.WWW_DOMAIN,
+            WORKER_DOMAIN: env.WORKER_DOMAIN
+        });
+ 
+        try {
+            // 记录请求信息
+            console.log('Incoming request:', {
+                url: request.url,
+                method: request.method,
+                headers: Object.fromEntries(request.headers)
+            });
+ 
+            const response = await handleRequest(request, env);
+ 
+            // 记录响应信息
+            console.log('Response details:', {
+                status: response.status,
+                headers: Object.fromEntries(response.headers)
+            });
+ 
+            return response;
+        } catch (error) {
+            console.error('Fatal error:', error);
+            return new Response('Internal Server Error', { status: 500 });
+        }
+    }
+ };
+
+    
+ 
+2. 配置DNS解析
+要将自定义域名指向 Worker，需要完成以下配置："><meta name=author content="Shawn"><link rel=canonical href=https://shenghairong.github.io/posts/2024-11-13-hide-gh_pages/><meta name=google-site-verification content="MndY3tORCb_aC5aixnfRSRi-XNI1XffYiDTVUhvIkCM"><link crossorigin=anonymous href=/assets/css/stylesheet.a8b4f6acb85031cad9e897b88016add045657d84ce513eaec6ae90b7169db3af.css integrity="sha256-qLT2rLhQMcrZ6Je4gBat0EVlfYTOUT6uxq6Qtxads68=" rel="preload stylesheet" as=style><link rel=icon href=https://shenghairong.github.io/favicon.ico><link rel=icon type=image/png sizes=16x16 href=https://shenghairong.github.io/favicon-16x16.png><link rel=icon type=image/png sizes=32x32 href=https://shenghairong.github.io/favicon-32x32.png><link rel=apple-touch-icon href=https://shenghairong.github.io/apple-touch-icon.png><link rel=mask-icon href=https://shenghairong.github.io/safari-pinned-tab.svg><meta name=theme-color content="#2e2e33"><meta name=msapplication-TileColor content="#2e2e33"><link rel=alternate hreflang=en href=https://shenghairong.github.io/posts/2024-11-13-hide-gh_pages/><noscript><style>#theme-toggle,.top-link{display:none}</style><style>@media(prefers-color-scheme:dark){:root{--theme:rgb(29, 30, 32);--entry:rgb(46, 46, 51);--primary:rgb(218, 218, 219);--secondary:rgb(155, 156, 157);--tertiary:rgb(65, 66, 68);--content:rgb(196, 196, 197);--code-block-bg:rgb(46, 46, 51);--code-bg:rgb(55, 56, 62);--border:rgb(51, 51, 51)}.list{background:var(--theme)}.list:not(.dark)::-webkit-scrollbar-track{background:0 0}.list:not(.dark)::-webkit-scrollbar-thumb{border-color:var(--theme)}}</style></noscript><script async src="https://www.googletagmanager.com/gtag/js?id=G-H385H7F08C"></script><script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag("js",new Date),gtag("config","G-H385H7F08C")</script><meta property="og:url" content="https://shenghairong.github.io/posts/2024-11-13-hide-gh_pages/"><meta property="og:site_name" content="Shawn's Blog"><meta property="og:title" content="隐藏真实的xxx.github.io"><meta property="og:description" content="前言 在免费使用 GitHub 私有仓库部署网站一文介绍了如何部署github pages，并实现了自定义域名的配置。本文介绍另一种自定义域名来访问github pages的方法， 特点是：
+访客无法通过user.me 追踪到真实的user.github.io 通过cloudflare worker来实现 user.me 指向 user.github.io 整个访问流程如下：
+用户访问 user.me ↓ Cloudflare DNS (指向 Worker) ↓ Worker 处理请求 (隐藏源站) ↓ Worker 访问 user.github.io ↓ GitHub Pages 返回内容 这种方案的优势：
+安全性更高：完全隐藏GitHub Pages源站 配置简单：无需复杂的DNS设置 更少出错：避免DNS解析冲突 维护方便：集中化管理 注意：使用这种方法时，GitHub Pages只需保持默认的xxx.github.io域名即可，无需配置CNAME文件。
+具体实现 1. 创建cf worker 首先创建一个名为hide-ghpage的Worker， 在设置中添加环境变量：
+GITHUB_PAGES 填写 xxx.github.io CUSTOM_DOMAIN 填写 user.me WWW_DOMAIN 填写 www.user.me WORKER_DOMAIN 填写 hide-ghpage.user.workers.dev 然后编辑代码如下：
+点击查看 ▼ function encodePathProperly(path) { // 先解码以防重复编码 const decodedPath = decodeURIComponent(path); // 替换特殊字符,之前被这个坑惨了。由于网页中包含邮件地址，特殊字符（如 @）在 URL 中无法正确处理，一直显示404. return decodedPath .split('/') .map(segment => segment .replace(/@/g, '%40') // 替换@ .replace(/#/g, '%23') .replace(/\?/g, '%3F') .replace(/\[/g, '%5B') .replace(/\]/g, '%5D') .replace(/=/g, '%3D') .replace(/&/g, '%26') ) .join('/'); } function initializeConfig(env) { console.log('Initializing with env vars:', { GITHUB_PAGES: env.GITHUB_PAGES, CUSTOM_DOMAIN: env.CUSTOM_DOMAIN, WWW_DOMAIN: env.WWW_DOMAIN, WORKER_DOMAIN: env.WORKER_DOMAIN }); const DOMAINS = { GITHUB: env.GITHUB_PAGES, CUSTOM: env.CUSTOM_DOMAIN, WWW: env.WWW_DOMAIN, WORKER: env.WORKER_DOMAIN }; return { domains: DOMAINS, githubPages: DOMAINS.GITHUB, allowedDomains: [DOMAINS.CUSTOM, DOMAINS.WWW, DOMAINS.WORKER], sensitiveHeaders: [ 'server', 'x-powered-by', 'x-github-request-id', 'x-fastly', 'x-proxy-cache', 'via', 'x-served-by', 'x-cache', 'x-cache-hits', 'x-timer', 'x-fastly-request-id', 'x-request-id', 'x-runtime', 'x-robots-tag', 'alt-svc', 'x-github', 'x-origin-cache', 'x-content-type-options' ], customHeaders: { 'server': 'cloudflare', 'X-Frame-Options': 'SAMEORIGIN', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'strict-origin-when-cross-origin', 'Permissions-Policy': 'interest-cohort=()', 'Content-Security-Policy': &#34;default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';&#34;, 'X-Powered-By': 'Cloudflare' }, debug: true }; } async function logError(error, request, extra = {}) { console.error('Error:', { message: error.message, stack: error.stack, url: request.url, method: request.method, ...extra }); } async function handleRequest(request, env) { const config = initializeConfig({ GITHUB_PAGES: env.GITHUB_PAGES, CUSTOM_DOMAIN: env.CUSTOM_DOMAIN, WWW_DOMAIN: env.WWW_DOMAIN, WORKER_DOMAIN: env.WORKER_DOMAIN }); const { domains } = config; try { const url = new URL(request.url); const currentDomain = url.hostname; // URL 编码处理 const encodedPath = encodePathProperly(url.pathname); console.log('URL encoding:', { originalPath: url.pathname, encodedPath: encodedPath }); // 详细的请求日志 console.log('Request details:', { url: url.toString(), domain: currentDomain, path: encodedPath, allowedDomains: config.allowedDomains, method: request.method, headers: Object.fromEntries(request.headers) }); // www 重定向到主域名 if (currentDomain === domains.WWW) { const newUrl = `https://${domains.CUSTOM}${encodedPath}${url.search}`; console.log('Redirecting www to non-www:', { from: url.toString(), to: newUrl }); return new Response(null, { status: 301, headers: { 'Location': newUrl, 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache', 'Expires': '0', 'server': 'cloudflare' } }); } // 验证域名 if (!config.allowedDomains.includes(currentDomain)) { console.warn('Invalid domain access:', { domain: currentDomain, allowedDomains: config.allowedDomains }); return new Response('Domain not allowed', { status: 403 }); } // 构建 GitHub URL const githubUrl = `https://${config.githubPages}${encodedPath}${url.search}`; console.log('Proxying to GitHub:', { from: url.toString(), to: githubUrl }); // 获取文件扩展名 const ext = encodedPath.split('.').pop().toLowerCase(); const isAsset = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'css', 'js', 'svg', 'ico', 'woff', 'woff2', 'ttf'].includes(ext); // 处理请求头 let newHeaders = new Headers(request.headers); // 清理敏感请求头 ['referer', 'origin', 'x-real-ip', 'cf-connecting-ip', 'x-forwarded-for', 'x-forwarded-proto', 'cookie'].forEach(header => { newHeaders.delete(header); }); // 设置新的请求头 newHeaders.set('Host', config.githubPages); newHeaders.set('Accept-Encoding', 'gzip, deflate, br'); newHeaders.set('User-Agent', request.headers.get('User-Agent') || 'Cloudflare Worker'); // 创建 GitHub 请求 const githubRequest = new Request(githubUrl, { method: request.method, headers: newHeaders, redirect: isAsset ? 'follow' : 'manual', cf: { cacheEverything: false, cacheTtl: isAsset ? 86400 : 0, timeout: 30000 } }); // 发送请求到 GitHub Pages let response = await fetch(githubRequest); console.log('GitHub response:', { status: response.status, statusText: response.statusText, headers: Object.fromEntries(response.headers), url: githubUrl }); // 如果是 404，增加调试日志 if (response.status === 404) { console.log('404 Error details:', { githubUrl, originalUrl: request.url, headers: Object.fromEntries(response.headers), domain: currentDomain, githubPages: config.githubPages }); // 尝试直接访问 GitHub Pages try { const testResponse = await fetch(`https://${config.githubPages}${encodedPath}`); console.log('Direct GitHub test:', { status: testResponse.status, headers: Object.fromEntries(testResponse.headers) }); } catch (error) { console.error('Direct GitHub test failed:', error); } } // 处理资源文件 if (isAsset) { let newResponse = new Response(response.body, { status: response.status, statusText: response.statusText, headers: new Headers(response.headers) }); const allowedHeaders = [ 'content-type', 'content-length', 'cache-control', 'content-encoding', 'etag', 'last-modified' ]; for (const key of [...newResponse.headers.keys()]) { if (!allowedHeaders.includes(key.toLowerCase())) { newResponse.headers.delete(key); } } if (response.ok) { newResponse.headers.set('Cache-Control', 'public, max-age=31536000'); } return newResponse; } // 处理重定向 if ([301, 302, 307, 308].includes(response.status)) { const location = response.headers.get('Location'); console.log('Handling redirect:', { from: url.toString(), location: location }); if (location) { const redirectUrl = new URL(location.startsWith('http') ? location : `https://${config.githubPages}${location}`); const newLocation = `https://${currentDomain}${redirectUrl.pathname}${redirectUrl.search}`; console.log('New redirect location:', newLocation); return new Response(null, { status: response.status, headers: { 'Location': newLocation, 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache', 'Expires': '0', 'server': 'cloudflare' } }); } } // 读取响应体 let body = await response.text(); // 替换规则 const replacements = [ [new RegExp(`https?://${config.githubPages}`, 'g'), `https://${currentDomain}`], [`${config.githubPages}`, currentDomain], [/href=&#34;\//g, `href=&#34;https://${currentDomain}/`], [/src=&#34;\//g, `src=&#34;https://${currentDomain}/`], [/src=&#34;([^&#34;]+)&#34;/g, (match, p1) => { if (p1.startsWith('http')) { return match.replace(config.githubPages, currentDomain); } else if (p1.startsWith('/')) { return `src=&#34;https://${currentDomain}${p1}&#34;`; } return match; }], [/srcset=&#34;([^&#34;]+)&#34;/g, (match, p1) => { return `srcset=&#34;${p1.split(',').map(src => { const [url, size] = src.trim().split(' '); if (url.startsWith('http')) { return `${url.replace(config.githubPages, currentDomain)} ${size || ''}`; } else if (url.startsWith('/')) { return `https://${currentDomain}${url} ${size || ''}`; } return `${url} ${size || ''}`; }).join(', ')}&#34;`; }], [/<meta[^>]*?content=&#34;[^&#34;]*?github\.io[^&#34;]*?&#34;[^>]*?>/g, (match) => { return match.replace(config.githubPages, currentDomain); }], [/<link[^>]*?rel=&#34;canonical&#34;[^>]*?href=&#34;[^&#34;]*?&#34;[^>]*?>/g, (match) => { return match.replace(config.githubPages, currentDomain); }], [/<script type=&#34;application\/ld\+json&#34;>[^<]*?<\/script>/g, (match) => { return match.replace(config.githubPages, currentDomain); }] ]; // 应用替换规则 replacements.forEach(([pattern, replacement]) => { body = body.replace(pattern, replacement); }); // 创建最终响应 let newResponse = new Response(body, { status: response.status, statusText: response.statusText, headers: new Headers({ 'Content-Type': response.headers.get('Content-Type') || 'text/html;charset=UTF-8', 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache', 'Expires': '0' }) }); // 添加安全头部 config.sensitiveHeaders.forEach(header => { newResponse.headers.delete(header); }); Object.entries(config.customHeaders).forEach(([key, value]) => { newResponse.headers.set(key, value); }); return newResponse; } catch (err) { await logError(err, request); return new Response(`Error: ${err.message}`, { status: 500, headers: { 'Content-Type': 'text/plain', 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache', 'Expires': '0', 'server': 'cloudflare' } }); } } export default { async fetch(request, env, ctx) { // 记录环境变量状态 console.log('Environment variables:', { GITHUB_PAGES: env.GITHUB_PAGES, CUSTOM_DOMAIN: env.CUSTOM_DOMAIN, WWW_DOMAIN: env.WWW_DOMAIN, WORKER_DOMAIN: env.WORKER_DOMAIN }); try { // 记录请求信息 console.log('Incoming request:', { url: request.url, method: request.method, headers: Object.fromEntries(request.headers) }); const response = await handleRequest(request, env); // 记录响应信息 console.log('Response details:', { status: response.status, headers: Object.fromEntries(response.headers) }); return response; } catch (error) { console.error('Fatal error:', error); return new Response('Internal Server Error', { status: 500 }); } } }; 2. 配置DNS解析 要将自定义域名指向 Worker，需要完成以下配置："><meta property="og:locale" content="en-us"><meta property="og:type" content="article"><meta property="article:section" content="posts"><meta property="article:published_time" content="2024-11-13T20:27:23+08:00"><meta property="article:modified_time" content="2024-11-13T20:27:23+08:00"><meta property="article:tag" content="Tutorial"><meta property="article:tag" content="Website"><meta name=twitter:card content="summary"><meta name=twitter:title content="隐藏真实的xxx.github.io"><meta name=twitter:description content="前言
+在免费使用 GitHub 私有仓库部署网站一文介绍了如何部署github pages，并实现了自定义域名的配置。本文介绍另一种自定义域名来访问github pages的方法， 特点是：
+
+访客无法通过user.me 追踪到真实的user.github.io
+通过cloudflare worker来实现 user.me 指向 user.github.io
+
+整个访问流程如下：
+用户访问 user.me
+↓
+Cloudflare DNS (指向 Worker)
+↓
+Worker 处理请求 (隐藏源站)
+↓
+Worker 访问 user.github.io
+↓
+GitHub Pages 返回内容
+这种方案的优势：
+
+安全性更高：完全隐藏GitHub Pages源站
+配置简单：无需复杂的DNS设置
+更少出错：避免DNS解析冲突
+维护方便：集中化管理
+
+
+注意：使用这种方法时，GitHub Pages只需保持默认的xxx.github.io域名即可，无需配置CNAME文件。
+
+具体实现
+1. 创建cf worker
+首先创建一个名为hide-ghpage的Worker，
+在设置中添加环境变量：
+
+GITHUB_PAGES 填写 xxx.github.io
+CUSTOM_DOMAIN 填写 user.me
+WWW_DOMAIN 填写 www.user.me
+WORKER_DOMAIN 填写 hide-ghpage.user.workers.dev
+
+然后编辑代码如下：
+
+
+    
+        点击查看
+        ▼
+    
+    
+        function encodePathProperly(path) {
+    // 先解码以防重复编码
+    const decodedPath = decodeURIComponent(path);
+    
+    // 替换特殊字符,之前被这个坑惨了。由于网页中包含邮件地址，特殊字符（如 @）在 URL 中无法正确处理，一直显示404.
+    return decodedPath
+        .split('/')
+        .map(segment => 
+            segment
+                .replace(/@/g, '%40')  // 替换@
+                .replace(/#/g, '%23')
+                .replace(/\?/g, '%3F')
+                .replace(/\[/g, '%5B')
+                .replace(/\]/g, '%5D')
+                .replace(/=/g, '%3D')
+                .replace(/&/g, '%26')
+        )
+        .join('/');
+ }
+ 
+ function initializeConfig(env) {
+    console.log('Initializing with env vars:', {
+        GITHUB_PAGES: env.GITHUB_PAGES,
+        CUSTOM_DOMAIN: env.CUSTOM_DOMAIN,
+        WWW_DOMAIN: env.WWW_DOMAIN,
+        WORKER_DOMAIN: env.WORKER_DOMAIN
+    });
+ 
+    const DOMAINS = {
+        GITHUB: env.GITHUB_PAGES,
+        CUSTOM: env.CUSTOM_DOMAIN,
+        WWW: env.WWW_DOMAIN,
+        WORKER: env.WORKER_DOMAIN
+    };
+ 
+    return {
+        domains: DOMAINS,
+        githubPages: DOMAINS.GITHUB,
+        allowedDomains: [DOMAINS.CUSTOM, DOMAINS.WWW, DOMAINS.WORKER],
+        sensitiveHeaders: [
+            'server',
+            'x-powered-by',
+            'x-github-request-id',
+            'x-fastly',
+            'x-proxy-cache',
+            'via',
+            'x-served-by',
+            'x-cache',
+            'x-cache-hits',
+            'x-timer',
+            'x-fastly-request-id',
+            'x-request-id',
+            'x-runtime',
+            'x-robots-tag',
+            'alt-svc',
+            'x-github',
+            'x-origin-cache',
+            'x-content-type-options'
+        ],
+        customHeaders: {
+            'server': 'cloudflare',
+            'X-Frame-Options': 'SAMEORIGIN',
+            'X-Content-Type-Options': 'nosniff',
+            'Referrer-Policy': 'strict-origin-when-cross-origin',
+            'Permissions-Policy': 'interest-cohort=()',
+            'Content-Security-Policy': &#34;default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';&#34;,
+            'X-Powered-By': 'Cloudflare'
+        },
+        debug: true
+    };
+ }
+ 
+ async function logError(error, request, extra = {}) {
+    console.error('Error:', {
+        message: error.message,
+        stack: error.stack,
+        url: request.url,
+        method: request.method,
+        ...extra
+    });
+ }
+ 
+ async function handleRequest(request, env) {
+    const config = initializeConfig({
+        GITHUB_PAGES: env.GITHUB_PAGES,
+        CUSTOM_DOMAIN: env.CUSTOM_DOMAIN,
+        WWW_DOMAIN: env.WWW_DOMAIN,
+        WORKER_DOMAIN: env.WORKER_DOMAIN
+    });
+    const { domains } = config;
+    
+    try {
+        const url = new URL(request.url);
+        const currentDomain = url.hostname;
+ 
+        // URL 编码处理
+        const encodedPath = encodePathProperly(url.pathname);
+        console.log('URL encoding:', {
+            originalPath: url.pathname,
+            encodedPath: encodedPath
+        });
+ 
+        // 详细的请求日志
+        console.log('Request details:', {
+            url: url.toString(),
+            domain: currentDomain,
+            path: encodedPath,
+            allowedDomains: config.allowedDomains,
+            method: request.method,
+            headers: Object.fromEntries(request.headers)
+        });
+ 
+        // www 重定向到主域名
+        if (currentDomain === domains.WWW) {
+            const newUrl = `https://${domains.CUSTOM}${encodedPath}${url.search}`;
+            console.log('Redirecting www to non-www:', {
+                from: url.toString(),
+                to: newUrl
+            });
+            
+            return new Response(null, {
+                status: 301,
+                headers: {
+                    'Location': newUrl,
+                    'Cache-Control': 'no-cache, no-store, must-revalidate',
+                    'Pragma': 'no-cache',
+                    'Expires': '0',
+                    'server': 'cloudflare'
+                }
+            });
+        }
+ 
+        // 验证域名
+        if (!config.allowedDomains.includes(currentDomain)) {
+            console.warn('Invalid domain access:', {
+                domain: currentDomain,
+                allowedDomains: config.allowedDomains
+            });
+            return new Response('Domain not allowed', { status: 403 });
+        }
+ 
+        // 构建 GitHub URL
+        const githubUrl = `https://${config.githubPages}${encodedPath}${url.search}`;
+        
+        console.log('Proxying to GitHub:', {
+            from: url.toString(),
+            to: githubUrl
+        });
+ 
+        // 获取文件扩展名
+        const ext = encodedPath.split('.').pop().toLowerCase();
+        const isAsset = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'css', 'js', 'svg', 'ico', 'woff', 'woff2', 'ttf'].includes(ext);
+ 
+        // 处理请求头
+        let newHeaders = new Headers(request.headers);
+        
+        // 清理敏感请求头
+        ['referer', 'origin', 'x-real-ip', 'cf-connecting-ip', 'x-forwarded-for', 'x-forwarded-proto', 'cookie'].forEach(header => {
+            newHeaders.delete(header);
+        });
+ 
+        // 设置新的请求头
+        newHeaders.set('Host', config.githubPages);
+        newHeaders.set('Accept-Encoding', 'gzip, deflate, br');
+        newHeaders.set('User-Agent', request.headers.get('User-Agent') || 'Cloudflare Worker');
+ 
+        // 创建 GitHub 请求
+        const githubRequest = new Request(githubUrl, {
+            method: request.method,
+            headers: newHeaders,
+            redirect: isAsset ? 'follow' : 'manual',
+            cf: {
+                cacheEverything: false,
+                cacheTtl: isAsset ? 86400 : 0,
+                timeout: 30000
+            }
+        });
+ 
+        // 发送请求到 GitHub Pages
+        let response = await fetch(githubRequest);
+        
+        console.log('GitHub response:', {
+            status: response.status,
+            statusText: response.statusText,
+            headers: Object.fromEntries(response.headers),
+            url: githubUrl
+        });
+ 
+        // 如果是 404，增加调试日志
+        if (response.status === 404) {
+            console.log('404 Error details:', {
+                githubUrl,
+                originalUrl: request.url,
+                headers: Object.fromEntries(response.headers),
+                domain: currentDomain,
+                githubPages: config.githubPages
+            });
+ 
+            // 尝试直接访问 GitHub Pages
+            try {
+                const testResponse = await fetch(`https://${config.githubPages}${encodedPath}`);
+                console.log('Direct GitHub test:', {
+                    status: testResponse.status,
+                    headers: Object.fromEntries(testResponse.headers)
+                });
+            } catch (error) {
+                console.error('Direct GitHub test failed:', error);
+            }
+        }
+ 
+        // 处理资源文件
+        if (isAsset) {
+            let newResponse = new Response(response.body, {
+                status: response.status,
+                statusText: response.statusText,
+                headers: new Headers(response.headers)
+            });
+ 
+            const allowedHeaders = [
+                'content-type',
+                'content-length',
+                'cache-control',
+                'content-encoding',
+                'etag',
+                'last-modified'
+            ];
+ 
+            for (const key of [...newResponse.headers.keys()]) {
+                if (!allowedHeaders.includes(key.toLowerCase())) {
+                    newResponse.headers.delete(key);
+                }
+            }
+ 
+            if (response.ok) {
+                newResponse.headers.set('Cache-Control', 'public, max-age=31536000');
+            }
+            return newResponse;
+        }
+ 
+        // 处理重定向
+        if ([301, 302, 307, 308].includes(response.status)) {
+            const location = response.headers.get('Location');
+            
+            console.log('Handling redirect:', {
+                from: url.toString(),
+                location: location
+            });
+ 
+            if (location) {
+                const redirectUrl = new URL(location.startsWith('http') ? location : `https://${config.githubPages}${location}`);
+                const newLocation = `https://${currentDomain}${redirectUrl.pathname}${redirectUrl.search}`;
+                
+                console.log('New redirect location:', newLocation);
+ 
+                return new Response(null, {
+                    status: response.status,
+                    headers: {
+                        'Location': newLocation,
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Pragma': 'no-cache',
+                        'Expires': '0',
+                        'server': 'cloudflare'
+                    }
+                });
+            }
+        }
+ 
+        // 读取响应体
+        let body = await response.text();
+ 
+        // 替换规则
+        const replacements = [
+            [new RegExp(`https?://${config.githubPages}`, 'g'), `https://${currentDomain}`],
+            [`${config.githubPages}`, currentDomain],
+            [/href=&#34;\//g, `href=&#34;https://${currentDomain}/`],
+            [/src=&#34;\//g, `src=&#34;https://${currentDomain}/`],
+            [/src=&#34;([^&#34;]+)&#34;/g, (match, p1) => {
+                if (p1.startsWith('http')) {
+                    return match.replace(config.githubPages, currentDomain);
+                } else if (p1.startsWith('/')) {
+                    return `src=&#34;https://${currentDomain}${p1}&#34;`;
+                }
+                return match;
+            }],
+            [/srcset=&#34;([^&#34;]+)&#34;/g, (match, p1) => {
+                return `srcset=&#34;${p1.split(',').map(src => {
+                    const [url, size] = src.trim().split(' ');
+                    if (url.startsWith('http')) {
+                        return `${url.replace(config.githubPages, currentDomain)} ${size || ''}`;
+                    } else if (url.startsWith('/')) {
+                        return `https://${currentDomain}${url} ${size || ''}`;
+                    }
+                    return `${url} ${size || ''}`;
+                }).join(', ')}&#34;`;
+            }],
+            [/<meta[^>]*?content=&#34;[^&#34;]*?github\.io[^&#34;]*?&#34;[^>]*?>/g, (match) => {
+                return match.replace(config.githubPages, currentDomain);
+            }],
+            [/<link[^>]*?rel=&#34;canonical&#34;[^>]*?href=&#34;[^&#34;]*?&#34;[^>]*?>/g, (match) => {
+                return match.replace(config.githubPages, currentDomain);
+            }],
+            [/<script type=&#34;application\/ld\+json&#34;>[^<]*?<\/script>/g, (match) => {
+                return match.replace(config.githubPages, currentDomain);
+            }]
+        ];
+ 
+        // 应用替换规则
+        replacements.forEach(([pattern, replacement]) => {
+            body = body.replace(pattern, replacement);
+        });
+ 
+        // 创建最终响应
+        let newResponse = new Response(body, {
+            status: response.status,
+            statusText: response.statusText,
+            headers: new Headers({
+                'Content-Type': response.headers.get('Content-Type') || 'text/html;charset=UTF-8',
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
+            })
+        });
+ 
+        // 添加安全头部
+        config.sensitiveHeaders.forEach(header => {
+            newResponse.headers.delete(header);
+        });
+ 
+        Object.entries(config.customHeaders).forEach(([key, value]) => {
+            newResponse.headers.set(key, value);
+        });
+ 
+        return newResponse;
+ 
+    } catch (err) {
+        await logError(err, request);
+        return new Response(`Error: ${err.message}`, { 
+            status: 500,
+            headers: {
+                'Content-Type': 'text/plain',
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0',
+                'server': 'cloudflare'
+            }
+        });
+    }
+ }
+ 
+ export default {
+    async fetch(request, env, ctx) {
+        // 记录环境变量状态
+        console.log('Environment variables:', {
+            GITHUB_PAGES: env.GITHUB_PAGES,
+            CUSTOM_DOMAIN: env.CUSTOM_DOMAIN,
+            WWW_DOMAIN: env.WWW_DOMAIN,
+            WORKER_DOMAIN: env.WORKER_DOMAIN
+        });
+ 
+        try {
+            // 记录请求信息
+            console.log('Incoming request:', {
+                url: request.url,
+                method: request.method,
+                headers: Object.fromEntries(request.headers)
+            });
+ 
+            const response = await handleRequest(request, env);
+ 
+            // 记录响应信息
+            console.log('Response details:', {
+                status: response.status,
+                headers: Object.fromEntries(response.headers)
+            });
+ 
+            return response;
+        } catch (error) {
+            console.error('Fatal error:', error);
+            return new Response('Internal Server Error', { status: 500 });
+        }
+    }
+ };
+
+    
+ 
+2. 配置DNS解析
+要将自定义域名指向 Worker，需要完成以下配置："><script type=application/ld+json>{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Posts","item":"https://shenghairong.github.io/posts/"},{"@type":"ListItem","position":2,"name":"隐藏真实的xxx.github.io","item":"https://shenghairong.github.io/posts/2024-11-13-hide-gh_pages/"}]}</script><script type=application/ld+json>{"@context":"https://schema.org","@type":"BlogPosting","headline":"隐藏真实的xxx.github.io","name":"隐藏真实的xxx.github.io","description":"前言 在免费使用 GitHub 私有仓库部署网站一文介绍了如何部署github pages，并实现了自定义域名的配置。本文介绍另一种自定义域名来访问github pages的方法， 特点是：\n访客无法通过user.me 追踪到真实的user.github.io 通过cloudflare worker来实现 user.me 指向 user.github.io 整个访问流程如下：\n用户访问 user.me ↓ Cloudflare DNS (指向 Worker) ↓ Worker 处理请求 (隐藏源站) ↓ Worker 访问 user.github.io ↓ GitHub Pages 返回内容 这种方案的优势：\n安全性更高：完全隐藏GitHub Pages源站 配置简单：无需复杂的DNS设置 更少出错：避免DNS解析冲突 维护方便：集中化管理 注意：使用这种方法时，GitHub Pages只需保持默认的xxx.github.io域名即可，无需配置CNAME文件。\n具体实现 1. 创建cf worker 首先创建一个名为hide-ghpage的Worker， 在设置中添加环境变量：\nGITHUB_PAGES 填写 xxx.github.io CUSTOM_DOMAIN 填写 user.me WWW_DOMAIN 填写 www.user.me WORKER_DOMAIN 填写 hide-ghpage.user.workers.dev 然后编辑代码如下：\n点击查看 ▼ function encodePathProperly(path) { // 先解码以防重复编码 const decodedPath = decodeURIComponent(path); // 替换特殊字符,之前被这个坑惨了。由于网页中包含邮件地址，特殊字符（如 @）在 URL 中无法正确处理，一直显示404. return decodedPath .split(\u0026#39;/\u0026#39;) .map(segment =\u0026gt; segment .replace(/@/g, \u0026#39;%40\u0026#39;) // 替换@ .replace(/#/g, \u0026#39;%23\u0026#39;) .replace(/\\?/g, \u0026#39;%3F\u0026#39;) .replace(/\\[/g, \u0026#39;%5B\u0026#39;) .replace(/\\]/g, \u0026#39;%5D\u0026#39;) .replace(/=/g, \u0026#39;%3D\u0026#39;) .replace(/\u0026amp;/g, \u0026#39;%26\u0026#39;) ) .join(\u0026#39;/\u0026#39;); } function initializeConfig(env) { console.log(\u0026#39;Initializing with env vars:\u0026#39;, { GITHUB_PAGES: env.GITHUB_PAGES, CUSTOM_DOMAIN: env.CUSTOM_DOMAIN, WWW_DOMAIN: env.WWW_DOMAIN, WORKER_DOMAIN: env.WORKER_DOMAIN }); const DOMAINS = { GITHUB: env.GITHUB_PAGES, CUSTOM: env.CUSTOM_DOMAIN, WWW: env.WWW_DOMAIN, WORKER: env.WORKER_DOMAIN }; return { domains: DOMAINS, githubPages: DOMAINS.GITHUB, allowedDomains: [DOMAINS.CUSTOM, DOMAINS.WWW, DOMAINS.WORKER], sensitiveHeaders: [ \u0026#39;server\u0026#39;, \u0026#39;x-powered-by\u0026#39;, \u0026#39;x-github-request-id\u0026#39;, \u0026#39;x-fastly\u0026#39;, \u0026#39;x-proxy-cache\u0026#39;, \u0026#39;via\u0026#39;, \u0026#39;x-served-by\u0026#39;, \u0026#39;x-cache\u0026#39;, \u0026#39;x-cache-hits\u0026#39;, \u0026#39;x-timer\u0026#39;, \u0026#39;x-fastly-request-id\u0026#39;, \u0026#39;x-request-id\u0026#39;, \u0026#39;x-runtime\u0026#39;, \u0026#39;x-robots-tag\u0026#39;, \u0026#39;alt-svc\u0026#39;, \u0026#39;x-github\u0026#39;, \u0026#39;x-origin-cache\u0026#39;, \u0026#39;x-content-type-options\u0026#39; ], customHeaders: { \u0026#39;server\u0026#39;: \u0026#39;cloudflare\u0026#39;, \u0026#39;X-Frame-Options\u0026#39;: \u0026#39;SAMEORIGIN\u0026#39;, \u0026#39;X-Content-Type-Options\u0026#39;: \u0026#39;nosniff\u0026#39;, \u0026#39;Referrer-Policy\u0026#39;: \u0026#39;strict-origin-when-cross-origin\u0026#39;, \u0026#39;Permissions-Policy\u0026#39;: \u0026#39;interest-cohort=()\u0026#39;, \u0026#39;Content-Security-Policy\u0026#39;: \u0026#34;default-src \u0026#39;self\u0026#39;; script-src \u0026#39;self\u0026#39; \u0026#39;unsafe-inline\u0026#39; \u0026#39;unsafe-eval\u0026#39;; style-src \u0026#39;self\u0026#39; \u0026#39;unsafe-inline\u0026#39;;\u0026#34;, \u0026#39;X-Powered-By\u0026#39;: \u0026#39;Cloudflare\u0026#39; }, debug: true }; } async function logError(error, request, extra = {}) { console.error(\u0026#39;Error:\u0026#39;, { message: error.message, stack: error.stack, url: request.url, method: request.method, ...extra }); } async function handleRequest(request, env) { const config = initializeConfig({ GITHUB_PAGES: env.GITHUB_PAGES, CUSTOM_DOMAIN: env.CUSTOM_DOMAIN, WWW_DOMAIN: env.WWW_DOMAIN, WORKER_DOMAIN: env.WORKER_DOMAIN }); const { domains } = config; try { const url = new URL(request.url); const currentDomain = url.hostname; // URL 编码处理 const encodedPath = encodePathProperly(url.pathname); console.log(\u0026#39;URL encoding:\u0026#39;, { originalPath: url.pathname, encodedPath: encodedPath }); // 详细的请求日志 console.log(\u0026#39;Request details:\u0026#39;, { url: url.toString(), domain: currentDomain, path: encodedPath, allowedDomains: config.allowedDomains, method: request.method, headers: Object.fromEntries(request.headers) }); // www 重定向到主域名 if (currentDomain === domains.WWW) { const newUrl = `https://${domains.CUSTOM}${encodedPath}${url.search}`; console.log(\u0026#39;Redirecting www to non-www:\u0026#39;, { from: url.toString(), to: newUrl }); return new Response(null, { status: 301, headers: { \u0026#39;Location\u0026#39;: newUrl, \u0026#39;Cache-Control\u0026#39;: \u0026#39;no-cache, no-store, must-revalidate\u0026#39;, \u0026#39;Pragma\u0026#39;: \u0026#39;no-cache\u0026#39;, \u0026#39;Expires\u0026#39;: \u0026#39;0\u0026#39;, \u0026#39;server\u0026#39;: \u0026#39;cloudflare\u0026#39; } }); } // 验证域名 if (!config.allowedDomains.includes(currentDomain)) { console.warn(\u0026#39;Invalid domain access:\u0026#39;, { domain: currentDomain, allowedDomains: config.allowedDomains }); return new Response(\u0026#39;Domain not allowed\u0026#39;, { status: 403 }); } // 构建 GitHub URL const githubUrl = `https://${config.githubPages}${encodedPath}${url.search}`; console.log(\u0026#39;Proxying to GitHub:\u0026#39;, { from: url.toString(), to: githubUrl }); // 获取文件扩展名 const ext = encodedPath.split(\u0026#39;.\u0026#39;).pop().toLowerCase(); const isAsset = [\u0026#39;png\u0026#39;, \u0026#39;jpg\u0026#39;, \u0026#39;jpeg\u0026#39;, \u0026#39;gif\u0026#39;, \u0026#39;webp\u0026#39;, \u0026#39;css\u0026#39;, \u0026#39;js\u0026#39;, \u0026#39;svg\u0026#39;, \u0026#39;ico\u0026#39;, \u0026#39;woff\u0026#39;, \u0026#39;woff2\u0026#39;, \u0026#39;ttf\u0026#39;].includes(ext); // 处理请求头 let newHeaders = new Headers(request.headers); // 清理敏感请求头 [\u0026#39;referer\u0026#39;, \u0026#39;origin\u0026#39;, \u0026#39;x-real-ip\u0026#39;, \u0026#39;cf-connecting-ip\u0026#39;, \u0026#39;x-forwarded-for\u0026#39;, \u0026#39;x-forwarded-proto\u0026#39;, \u0026#39;cookie\u0026#39;].forEach(header =\u0026gt; { newHeaders.delete(header); }); // 设置新的请求头 newHeaders.set(\u0026#39;Host\u0026#39;, config.githubPages); newHeaders.set(\u0026#39;Accept-Encoding\u0026#39;, \u0026#39;gzip, deflate, br\u0026#39;); newHeaders.set(\u0026#39;User-Agent\u0026#39;, request.headers.get(\u0026#39;User-Agent\u0026#39;) || \u0026#39;Cloudflare Worker\u0026#39;); // 创建 GitHub 请求 const githubRequest = new Request(githubUrl, { method: request.method, headers: newHeaders, redirect: isAsset ? \u0026#39;follow\u0026#39; : \u0026#39;manual\u0026#39;, cf: { cacheEverything: false, cacheTtl: isAsset ? 86400 : 0, timeout: 30000 } }); // 发送请求到 GitHub Pages let response = await fetch(githubRequest); console.log(\u0026#39;GitHub response:\u0026#39;, { status: response.status, statusText: response.statusText, headers: Object.fromEntries(response.headers), url: githubUrl }); // 如果是 404，增加调试日志 if (response.status === 404) { console.log(\u0026#39;404 Error details:\u0026#39;, { githubUrl, originalUrl: request.url, headers: Object.fromEntries(response.headers), domain: currentDomain, githubPages: config.githubPages }); // 尝试直接访问 GitHub Pages try { const testResponse = await fetch(`https://${config.githubPages}${encodedPath}`); console.log(\u0026#39;Direct GitHub test:\u0026#39;, { status: testResponse.status, headers: Object.fromEntries(testResponse.headers) }); } catch (error) { console.error(\u0026#39;Direct GitHub test failed:\u0026#39;, error); } } // 处理资源文件 if (isAsset) { let newResponse = new Response(response.body, { status: response.status, statusText: response.statusText, headers: new Headers(response.headers) }); const allowedHeaders = [ \u0026#39;content-type\u0026#39;, \u0026#39;content-length\u0026#39;, \u0026#39;cache-control\u0026#39;, \u0026#39;content-encoding\u0026#39;, \u0026#39;etag\u0026#39;, \u0026#39;last-modified\u0026#39; ]; for (const key of [...newResponse.headers.keys()]) { if (!allowedHeaders.includes(key.toLowerCase())) { newResponse.headers.delete(key); } } if (response.ok) { newResponse.headers.set(\u0026#39;Cache-Control\u0026#39;, \u0026#39;public, max-age=31536000\u0026#39;); } return newResponse; } // 处理重定向 if ([301, 302, 307, 308].includes(response.status)) { const location = response.headers.get(\u0026#39;Location\u0026#39;); console.log(\u0026#39;Handling redirect:\u0026#39;, { from: url.toString(), location: location }); if (location) { const redirectUrl = new URL(location.startsWith(\u0026#39;http\u0026#39;) ? location : `https://${config.githubPages}${location}`); const newLocation = `https://${currentDomain}${redirectUrl.pathname}${redirectUrl.search}`; console.log(\u0026#39;New redirect location:\u0026#39;, newLocation); return new Response(null, { status: response.status, headers: { \u0026#39;Location\u0026#39;: newLocation, \u0026#39;Cache-Control\u0026#39;: \u0026#39;no-cache, no-store, must-revalidate\u0026#39;, \u0026#39;Pragma\u0026#39;: \u0026#39;no-cache\u0026#39;, \u0026#39;Expires\u0026#39;: \u0026#39;0\u0026#39;, \u0026#39;server\u0026#39;: \u0026#39;cloudflare\u0026#39; } }); } } // 读取响应体 let body = await response.text(); // 替换规则 const replacements = [ [new RegExp(`https?://${config.githubPages}`, \u0026#39;g\u0026#39;), `https://${currentDomain}`], [`${config.githubPages}`, currentDomain], [/href=\u0026#34;\\//g, `href=\u0026#34;https://${currentDomain}/`], [/src=\u0026#34;\\//g, `src=\u0026#34;https://${currentDomain}/`], [/src=\u0026#34;([^\u0026#34;]+)\u0026#34;/g, (match, p1) =\u0026gt; { if (p1.startsWith(\u0026#39;http\u0026#39;)) { return match.replace(config.githubPages, currentDomain); } else if (p1.startsWith(\u0026#39;/\u0026#39;)) { return `src=\u0026#34;https://${currentDomain}${p1}\u0026#34;`; } return match; }], [/srcset=\u0026#34;([^\u0026#34;]+)\u0026#34;/g, (match, p1) =\u0026gt; { return `srcset=\u0026#34;${p1.split(\u0026#39;,\u0026#39;).map(src =\u0026gt; { const [url, size] = src.trim().split(\u0026#39; \u0026#39;); if (url.startsWith(\u0026#39;http\u0026#39;)) { return `${url.replace(config.githubPages, currentDomain)} ${size || \u0026#39;\u0026#39;}`; } else if (url.startsWith(\u0026#39;/\u0026#39;)) { return `https://${currentDomain}${url} ${size || \u0026#39;\u0026#39;}`; } return `${url} ${size || \u0026#39;\u0026#39;}`; }).join(\u0026#39;, \u0026#39;)}\u0026#34;`; }], [/\u0026lt;meta[^\u0026gt;]*?content=\u0026#34;[^\u0026#34;]*?github\\.io[^\u0026#34;]*?\u0026#34;[^\u0026gt;]*?\u0026gt;/g, (match) =\u0026gt; { return match.replace(config.githubPages, currentDomain); }], [/\u0026lt;link[^\u0026gt;]*?rel=\u0026#34;canonical\u0026#34;[^\u0026gt;]*?href=\u0026#34;[^\u0026#34;]*?\u0026#34;[^\u0026gt;]*?\u0026gt;/g, (match) =\u0026gt; { return match.replace(config.githubPages, currentDomain); }], [/\u0026lt;script type=\u0026#34;application\\/ld\\+json\u0026#34;\u0026gt;[^\u0026lt;]*?\u0026lt;\\/script\u0026gt;/g, (match) =\u0026gt; { return match.replace(config.githubPages, currentDomain); }] ]; // 应用替换规则 replacements.forEach(([pattern, replacement]) =\u0026gt; { body = body.replace(pattern, replacement); }); // 创建最终响应 let newResponse = new Response(body, { status: response.status, statusText: response.statusText, headers: new Headers({ \u0026#39;Content-Type\u0026#39;: response.headers.get(\u0026#39;Content-Type\u0026#39;) || \u0026#39;text/html;charset=UTF-8\u0026#39;, \u0026#39;Cache-Control\u0026#39;: \u0026#39;no-cache, no-store, must-revalidate\u0026#39;, \u0026#39;Pragma\u0026#39;: \u0026#39;no-cache\u0026#39;, \u0026#39;Expires\u0026#39;: \u0026#39;0\u0026#39; }) }); // 添加安全头部 config.sensitiveHeaders.forEach(header =\u0026gt; { newResponse.headers.delete(header); }); Object.entries(config.customHeaders).forEach(([key, value]) =\u0026gt; { newResponse.headers.set(key, value); }); return newResponse; } catch (err) { await logError(err, request); return new Response(`Error: ${err.message}`, { status: 500, headers: { \u0026#39;Content-Type\u0026#39;: \u0026#39;text/plain\u0026#39;, \u0026#39;Cache-Control\u0026#39;: \u0026#39;no-cache, no-store, must-revalidate\u0026#39;, \u0026#39;Pragma\u0026#39;: \u0026#39;no-cache\u0026#39;, \u0026#39;Expires\u0026#39;: \u0026#39;0\u0026#39;, \u0026#39;server\u0026#39;: \u0026#39;cloudflare\u0026#39; } }); } } export default { async fetch(request, env, ctx) { // 记录环境变量状态 console.log(\u0026#39;Environment variables:\u0026#39;, { GITHUB_PAGES: env.GITHUB_PAGES, CUSTOM_DOMAIN: env.CUSTOM_DOMAIN, WWW_DOMAIN: env.WWW_DOMAIN, WORKER_DOMAIN: env.WORKER_DOMAIN }); try { // 记录请求信息 console.log(\u0026#39;Incoming request:\u0026#39;, { url: request.url, method: request.method, headers: Object.fromEntries(request.headers) }); const response = await handleRequest(request, env); // 记录响应信息 console.log(\u0026#39;Response details:\u0026#39;, { status: response.status, headers: Object.fromEntries(response.headers) }); return response; } catch (error) { console.error(\u0026#39;Fatal error:\u0026#39;, error); return new Response(\u0026#39;Internal Server Error\u0026#39;, { status: 500 }); } } }; 2. 配置DNS解析 要将自定义域名指向 Worker，需要完成以下配置：\n","keywords":["tutorial","website"],"articleBody":"前言 在免费使用 GitHub 私有仓库部署网站一文介绍了如何部署github pages，并实现了自定义域名的配置。本文介绍另一种自定义域名来访问github pages的方法， 特点是：\n访客无法通过user.me 追踪到真实的user.github.io 通过cloudflare worker来实现 user.me 指向 user.github.io 整个访问流程如下：\n用户访问 user.me ↓ Cloudflare DNS (指向 Worker) ↓ Worker 处理请求 (隐藏源站) ↓ Worker 访问 user.github.io ↓ GitHub Pages 返回内容 这种方案的优势：\n安全性更高：完全隐藏GitHub Pages源站 配置简单：无需复杂的DNS设置 更少出错：避免DNS解析冲突 维护方便：集中化管理 注意：使用这种方法时，GitHub Pages只需保持默认的xxx.github.io域名即可，无需配置CNAME文件。\n具体实现 1. 创建cf worker 首先创建一个名为hide-ghpage的Worker， 在设置中添加环境变量：\nGITHUB_PAGES 填写 xxx.github.io CUSTOM_DOMAIN 填写 user.me WWW_DOMAIN 填写 www.user.me WORKER_DOMAIN 填写 hide-ghpage.user.workers.dev 然后编辑代码如下：\n点击查看 ▼ function encodePathProperly(path) { // 先解码以防重复编码 const decodedPath = decodeURIComponent(path); // 替换特殊字符,之前被这个坑惨了。由于网页中包含邮件地址，特殊字符（如 @）在 URL 中无法正确处理，一直显示404. return decodedPath .split('/') .map(segment =\u003e segment .replace(/@/g, '%40') // 替换@ .replace(/#/g, '%23') .replace(/\\?/g, '%3F') .replace(/\\[/g, '%5B') .replace(/\\]/g, '%5D') .replace(/=/g, '%3D') .replace(/\u0026/g, '%26') ) .join('/'); } function initializeConfig(env) { console.log('Initializing with env vars:', { GITHUB_PAGES: env.GITHUB_PAGES, CUSTOM_DOMAIN: env.CUSTOM_DOMAIN, WWW_DOMAIN: env.WWW_DOMAIN, WORKER_DOMAIN: env.WORKER_DOMAIN }); const DOMAINS = { GITHUB: env.GITHUB_PAGES, CUSTOM: env.CUSTOM_DOMAIN, WWW: env.WWW_DOMAIN, WORKER: env.WORKER_DOMAIN }; return { domains: DOMAINS, githubPages: DOMAINS.GITHUB, allowedDomains: [DOMAINS.CUSTOM, DOMAINS.WWW, DOMAINS.WORKER], sensitiveHeaders: [ 'server', 'x-powered-by', 'x-github-request-id', 'x-fastly', 'x-proxy-cache', 'via', 'x-served-by', 'x-cache', 'x-cache-hits', 'x-timer', 'x-fastly-request-id', 'x-request-id', 'x-runtime', 'x-robots-tag', 'alt-svc', 'x-github', 'x-origin-cache', 'x-content-type-options' ], customHeaders: { 'server': 'cloudflare', 'X-Frame-Options': 'SAMEORIGIN', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'strict-origin-when-cross-origin', 'Permissions-Policy': 'interest-cohort=()', 'Content-Security-Policy': \"default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';\", 'X-Powered-By': 'Cloudflare' }, debug: true }; } async function logError(error, request, extra = {}) { console.error('Error:', { message: error.message, stack: error.stack, url: request.url, method: request.method, ...extra }); } async function handleRequest(request, env) { const config = initializeConfig({ GITHUB_PAGES: env.GITHUB_PAGES, CUSTOM_DOMAIN: env.CUSTOM_DOMAIN, WWW_DOMAIN: env.WWW_DOMAIN, WORKER_DOMAIN: env.WORKER_DOMAIN }); const { domains } = config; try { const url = new URL(request.url); const currentDomain = url.hostname; // URL 编码处理 const encodedPath = encodePathProperly(url.pathname); console.log('URL encoding:', { originalPath: url.pathname, encodedPath: encodedPath }); // 详细的请求日志 console.log('Request details:', { url: url.toString(), domain: currentDomain, path: encodedPath, allowedDomains: config.allowedDomains, method: request.method, headers: Object.fromEntries(request.headers) }); // www 重定向到主域名 if (currentDomain === domains.WWW) { const newUrl = `https://${domains.CUSTOM}${encodedPath}${url.search}`; console.log('Redirecting www to non-www:', { from: url.toString(), to: newUrl }); return new Response(null, { status: 301, headers: { 'Location': newUrl, 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache', 'Expires': '0', 'server': 'cloudflare' } }); } // 验证域名 if (!config.allowedDomains.includes(currentDomain)) { console.warn('Invalid domain access:', { domain: currentDomain, allowedDomains: config.allowedDomains }); return new Response('Domain not allowed', { status: 403 }); } // 构建 GitHub URL const githubUrl = `https://${config.githubPages}${encodedPath}${url.search}`; console.log('Proxying to GitHub:', { from: url.toString(), to: githubUrl }); // 获取文件扩展名 const ext = encodedPath.split('.').pop().toLowerCase(); const isAsset = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'css', 'js', 'svg', 'ico', 'woff', 'woff2', 'ttf'].includes(ext); // 处理请求头 let newHeaders = new Headers(request.headers); // 清理敏感请求头 ['referer', 'origin', 'x-real-ip', 'cf-connecting-ip', 'x-forwarded-for', 'x-forwarded-proto', 'cookie'].forEach(header =\u003e { newHeaders.delete(header); }); // 设置新的请求头 newHeaders.set('Host', config.githubPages); newHeaders.set('Accept-Encoding', 'gzip, deflate, br'); newHeaders.set('User-Agent', request.headers.get('User-Agent') || 'Cloudflare Worker'); // 创建 GitHub 请求 const githubRequest = new Request(githubUrl, { method: request.method, headers: newHeaders, redirect: isAsset ? 'follow' : 'manual', cf: { cacheEverything: false, cacheTtl: isAsset ? 86400 : 0, timeout: 30000 } }); // 发送请求到 GitHub Pages let response = await fetch(githubRequest); console.log('GitHub response:', { status: response.status, statusText: response.statusText, headers: Object.fromEntries(response.headers), url: githubUrl }); // 如果是 404，增加调试日志 if (response.status === 404) { console.log('404 Error details:', { githubUrl, originalUrl: request.url, headers: Object.fromEntries(response.headers), domain: currentDomain, githubPages: config.githubPages }); // 尝试直接访问 GitHub Pages try { const testResponse = await fetch(`https://${config.githubPages}${encodedPath}`); console.log('Direct GitHub test:', { status: testResponse.status, headers: Object.fromEntries(testResponse.headers) }); } catch (error) { console.error('Direct GitHub test failed:', error); } } // 处理资源文件 if (isAsset) { let newResponse = new Response(response.body, { status: response.status, statusText: response.statusText, headers: new Headers(response.headers) }); const allowedHeaders = [ 'content-type', 'content-length', 'cache-control', 'content-encoding', 'etag', 'last-modified' ]; for (const key of [...newResponse.headers.keys()]) { if (!allowedHeaders.includes(key.toLowerCase())) { newResponse.headers.delete(key); } } if (response.ok) { newResponse.headers.set('Cache-Control', 'public, max-age=31536000'); } return newResponse; } // 处理重定向 if ([301, 302, 307, 308].includes(response.status)) { const location = response.headers.get('Location'); console.log('Handling redirect:', { from: url.toString(), location: location }); if (location) { const redirectUrl = new URL(location.startsWith('http') ? location : `https://${config.githubPages}${location}`); const newLocation = `https://${currentDomain}${redirectUrl.pathname}${redirectUrl.search}`; console.log('New redirect location:', newLocation); return new Response(null, { status: response.status, headers: { 'Location': newLocation, 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache', 'Expires': '0', 'server': 'cloudflare' } }); } } // 读取响应体 let body = await response.text(); // 替换规则 const replacements = [ [new RegExp(`https?://${config.githubPages}`, 'g'), `https://${currentDomain}`], [`${config.githubPages}`, currentDomain], [/href=\"\\//g, `href=\"https://${currentDomain}/`], [/src=\"\\//g, `src=\"https://${currentDomain}/`], [/src=\"([^\"]+)\"/g, (match, p1) =\u003e { if (p1.startsWith('http')) { return match.replace(config.githubPages, currentDomain); } else if (p1.startsWith('/')) { return `src=\"https://${currentDomain}${p1}\"`; } return match; }], [/srcset=\"([^\"]+)\"/g, (match, p1) =\u003e { return `srcset=\"${p1.split(',').map(src =\u003e { const [url, size] = src.trim().split(' '); if (url.startsWith('http')) { return `${url.replace(config.githubPages, currentDomain)} ${size || ''}`; } else if (url.startsWith('/')) { return `https://${currentDomain}${url} ${size || ''}`; } return `${url} ${size || ''}`; }).join(', ')}\"`; }], [/]*?content=\"[^\"]*?github\\.io[^\"]*?\"[^\u003e]*?\u003e/g, (match) =\u003e { return match.replace(config.githubPages, currentDomain); }], [/]*?rel=\"canonical\"[^\u003e]*?href=\"[^\"]*?\"[^\u003e]*?\u003e/g, (match) =\u003e { return match.replace(config.githubPages, currentDomain); }], [/","wordCount":"1051","inLanguage":"en","datePublished":"2024-11-13T20:27:23+08:00","dateModified":"2024-11-13T20:27:23+08:00","author":{"@type":"Person","name":"Shawn"},"mainEntityOfPage":{"@type":"WebPage","@id":"https://shenghairong.github.io/posts/2024-11-13-hide-gh_pages/"},"publisher":{"@type":"Organization","name":"Shawn's Blog","logo":{"@type":"ImageObject","url":"https://shenghairong.github.io/favicon.ico"}}}</script></head><body id=top><script>localStorage.getItem("pref-theme")==="dark"?document.body.classList.add("dark"):localStorage.getItem("pref-theme")==="light"?document.body.classList.remove("dark"):window.matchMedia("(prefers-color-scheme: dark)").matches&&document.body.classList.add("dark")</script><header class=header><nav class=nav><div class=logo><a href=https://shenghairong.github.io/ accesskey=h title="Shawn's Blog (Alt + H)"><img src=https://shenghairong.github.io/apple-touch-icon.png alt aria-label=logo height=35>Shawn's Blog</a><div class=logo-switches><button id=theme-toggle accesskey=t title="(Alt + T)"><svg id="moon" width="24" height="18" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg><svg id="sun" width="24" height="18" viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg></button></div></div><ul id=menu><li><a href=https://shenghairong.github.io/posts/ title=Posts><span>Posts</span></a></li><li><a href=https://shenghairong.github.io/archive/ title=Archive><span>Archive</span></a></li><li><a href=https://shenghairong.github.io/search/ title="Search (Alt + /)" accesskey=/><span>Search</span></a></li><li><a href=https://shenghairong.github.io/tags/ title=Tags><span>Tags</span></a></li></ul></nav></header><main class=main><article class=post-single><header class=post-header><div class=breadcrumbs><a href=https://shenghairong.github.io/>Home</a>&nbsp;»&nbsp;<a href=https://shenghairong.github.io/posts/>Posts</a></div><h1 class="post-title entry-hint-parent">隐藏真实的xxx.github.io</h1><div class=post-meta><span title='2024-11-13 20:27:23 +0800 CST'>November 13, 2024</span>&nbsp;·&nbsp;1051 words&nbsp;·&nbsp;Shawn</div></header><div class=toc><details><summary accesskey=c title="(Alt + C)"><span class=details>Table of Contents</span></summary><div class=inner><ul><li><a href=#%e5%89%8d%e8%a8%80 aria-label=前言>前言</a></li><li><a href=#%e5%85%b7%e4%bd%93%e5%ae%9e%e7%8e%b0 aria-label=具体实现>具体实现</a><ul><li><a href=#1-%e5%88%9b%e5%bb%bacf-worker aria-label="1. 创建cf worker">1. 创建cf worker</a></li><li><a href=#2-%e9%85%8d%e7%bd%aedns%e8%a7%a3%e6%9e%90 aria-label="2. 配置DNS解析">2. 配置DNS解析</a><ul><li><a href=#%e8%87%aa%e5%ae%9a%e4%b9%89%e5%9f%9f%e5%90%8d%e4%b8%8e%e5%8c%ba%e5%9f%9f%e8%b7%af%e7%94%b1%e7%9a%84%e5%8c%ba%e5%88%ab aria-label=自定义域名与区域路由的区别>自定义域名与区域路由的区别</a></li></ul></li><li><a href=#3-%e9%85%8d%e7%bd%aessltls aria-label="3. 配置SSL/TLS">3. 配置SSL/TLS</a></li><li><a href=#4-%e9%85%8d%e7%bd%ae%e7%bc%93%e5%ad%98%e8%a7%84%e5%88%99 aria-label="4. 配置缓存规则">4. 配置缓存规则</a></li></ul></li><li><a href=#%e6%b3%a8%e6%84%8f%e4%ba%8b%e9%a1%b9 aria-label=注意事项>注意事项</a></li><li><a href=#%e6%80%bb%e7%bb%93 aria-label=总结>总结</a></li></ul></div></details></div><div class=post-content><h2 id=前言>前言<a hidden class=anchor aria-hidden=true href=#前言>#</a></h2><p>在<a href=/posts/2024-11-10-hugo-gh_pages/>免费使用 GitHub 私有仓库部署网站</a>一文介绍了如何部署github pages，并实现了自定义域名的配置。本文介绍另一种自定义域名来访问github pages的方法， 特点是：</p><ul><li>访客无法通过<code>user.me</code> 追踪到真实的<code>user.github.io</code></li><li>通过cloudflare worker来实现 <code>user.me</code> 指向 <code>user.github.io</code></li></ul><p>整个访问流程如下：</p><pre tabindex=0><code>用户访问 user.me
+↓
+Cloudflare DNS (指向 Worker)
+↓
+Worker 处理请求 (隐藏源站)
+↓
+Worker 访问 user.github.io
+↓
+GitHub Pages 返回内容
+</code></pre><p>这种方案的优势：</p><ol><li><strong>安全性更高</strong>：完全隐藏GitHub Pages源站</li><li><strong>配置简单</strong>：无需复杂的DNS设置</li><li><strong>更少出错</strong>：避免DNS解析冲突</li><li><strong>维护方便</strong>：集中化管理</li></ol><blockquote><p>注意：使用这种方法时，GitHub Pages只需保持默认的<code>xxx.github.io</code>域名即可，无需配置<code>CNAME</code>文件。</p></blockquote><h2 id=具体实现>具体实现<a hidden class=anchor aria-hidden=true href=#具体实现>#</a></h2><h3 id=1-创建cf-worker>1. 创建cf worker<a hidden class=anchor aria-hidden=true href=#1-创建cf-worker>#</a></h3><p>首先创建一个名为<code>hide-ghpage</code>的Worker，
+在设置中添加环境变量：</p><ul><li><code>GITHUB_PAGES</code> 填写 <code>xxx.github.io</code></li><li><code>CUSTOM_DOMAIN</code> 填写 <code>user.me</code></li><li><code>WWW_DOMAIN</code> 填写 <code>www.user.me</code></li><li><code>WORKER_DOMAIN</code> 填写 <code>hide-ghpage.user.workers.dev</code></li></ul><p>然后编辑代码如下：</p><div class=collapse-wrapper><button class=collapse-button onclick='this.parentElement.classList.toggle("active")'>
+点击查看
+<span class=collapse-icon>▼</span></button><div class=collapse-content><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-javascript data-lang=javascript><span style=display:flex><span><span style=color:#66d9ef>function</span> <span style=color:#a6e22e>encodePathProperly</span>(<span style=color:#a6e22e>path</span>) {
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// 先解码以防重复编码
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>decodedPath</span> <span style=color:#f92672>=</span> decodeURIComponent(<span style=color:#a6e22e>path</span>);
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    <span style=color:#75715e>// 替换特殊字符,之前被这个坑惨了。由于网页中包含邮件地址，特殊字符（如 @）在 URL 中无法正确处理，一直显示404.
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>    <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>decodedPath</span>
+</span></span><span style=display:flex><span>        .<span style=color:#a6e22e>split</span>(<span style=color:#e6db74>&#39;/&#39;</span>)
+</span></span><span style=display:flex><span>        .<span style=color:#a6e22e>map</span>(<span style=color:#a6e22e>segment</span> =&gt; 
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>segment</span>
+</span></span><span style=display:flex><span>                .<span style=color:#a6e22e>replace</span>(<span style=color:#e6db74>/@/g</span>, <span style=color:#e6db74>&#39;%40&#39;</span>)  <span style=color:#75715e>// 替换@
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>                .<span style=color:#a6e22e>replace</span>(<span style=color:#e6db74>/#/g</span>, <span style=color:#e6db74>&#39;%23&#39;</span>)
+</span></span><span style=display:flex><span>                .<span style=color:#a6e22e>replace</span>(<span style=color:#e6db74>/\?/g</span>, <span style=color:#e6db74>&#39;%3F&#39;</span>)
+</span></span><span style=display:flex><span>                .<span style=color:#a6e22e>replace</span>(<span style=color:#e6db74>/\[/g</span>, <span style=color:#e6db74>&#39;%5B&#39;</span>)
+</span></span><span style=display:flex><span>                .<span style=color:#a6e22e>replace</span>(<span style=color:#e6db74>/\]/g</span>, <span style=color:#e6db74>&#39;%5D&#39;</span>)
+</span></span><span style=display:flex><span>                .<span style=color:#a6e22e>replace</span>(<span style=color:#e6db74>/=/g</span>, <span style=color:#e6db74>&#39;%3D&#39;</span>)
+</span></span><span style=display:flex><span>                .<span style=color:#a6e22e>replace</span>(<span style=color:#e6db74>/&amp;/g</span>, <span style=color:#e6db74>&#39;%26&#39;</span>)
+</span></span><span style=display:flex><span>        )
+</span></span><span style=display:flex><span>        .<span style=color:#a6e22e>join</span>(<span style=color:#e6db74>&#39;/&#39;</span>);
+</span></span><span style=display:flex><span> }
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span> <span style=color:#66d9ef>function</span> <span style=color:#a6e22e>initializeConfig</span>(<span style=color:#a6e22e>env</span>) {
+</span></span><span style=display:flex><span>    <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#e6db74>&#39;Initializing with env vars:&#39;</span>, {
+</span></span><span style=display:flex><span>        <span style=color:#a6e22e>GITHUB_PAGES</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>env</span>.<span style=color:#a6e22e>GITHUB_PAGES</span>,
+</span></span><span style=display:flex><span>        <span style=color:#a6e22e>CUSTOM_DOMAIN</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>env</span>.<span style=color:#a6e22e>CUSTOM_DOMAIN</span>,
+</span></span><span style=display:flex><span>        <span style=color:#a6e22e>WWW_DOMAIN</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>env</span>.<span style=color:#a6e22e>WWW_DOMAIN</span>,
+</span></span><span style=display:flex><span>        <span style=color:#a6e22e>WORKER_DOMAIN</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>env</span>.<span style=color:#a6e22e>WORKER_DOMAIN</span>
+</span></span><span style=display:flex><span>    });
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>DOMAINS</span> <span style=color:#f92672>=</span> {
+</span></span><span style=display:flex><span>        <span style=color:#a6e22e>GITHUB</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>env</span>.<span style=color:#a6e22e>GITHUB_PAGES</span>,
+</span></span><span style=display:flex><span>        <span style=color:#a6e22e>CUSTOM</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>env</span>.<span style=color:#a6e22e>CUSTOM_DOMAIN</span>,
+</span></span><span style=display:flex><span>        <span style=color:#a6e22e>WWW</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>env</span>.<span style=color:#a6e22e>WWW_DOMAIN</span>,
+</span></span><span style=display:flex><span>        <span style=color:#a6e22e>WORKER</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>env</span>.<span style=color:#a6e22e>WORKER_DOMAIN</span>
+</span></span><span style=display:flex><span>    };
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>return</span> {
+</span></span><span style=display:flex><span>        <span style=color:#a6e22e>domains</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>DOMAINS</span>,
+</span></span><span style=display:flex><span>        <span style=color:#a6e22e>githubPages</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>DOMAINS</span>.<span style=color:#a6e22e>GITHUB</span>,
+</span></span><span style=display:flex><span>        <span style=color:#a6e22e>allowedDomains</span><span style=color:#f92672>:</span> [<span style=color:#a6e22e>DOMAINS</span>.<span style=color:#a6e22e>CUSTOM</span>, <span style=color:#a6e22e>DOMAINS</span>.<span style=color:#a6e22e>WWW</span>, <span style=color:#a6e22e>DOMAINS</span>.<span style=color:#a6e22e>WORKER</span>],
+</span></span><span style=display:flex><span>        <span style=color:#a6e22e>sensitiveHeaders</span><span style=color:#f92672>:</span> [
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#39;server&#39;</span>,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#39;x-powered-by&#39;</span>,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#39;x-github-request-id&#39;</span>,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#39;x-fastly&#39;</span>,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#39;x-proxy-cache&#39;</span>,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#39;via&#39;</span>,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#39;x-served-by&#39;</span>,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#39;x-cache&#39;</span>,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#39;x-cache-hits&#39;</span>,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#39;x-timer&#39;</span>,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#39;x-fastly-request-id&#39;</span>,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#39;x-request-id&#39;</span>,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#39;x-runtime&#39;</span>,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#39;x-robots-tag&#39;</span>,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#39;alt-svc&#39;</span>,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#39;x-github&#39;</span>,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#39;x-origin-cache&#39;</span>,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#39;x-content-type-options&#39;</span>
+</span></span><span style=display:flex><span>        ],
+</span></span><span style=display:flex><span>        <span style=color:#a6e22e>customHeaders</span><span style=color:#f92672>:</span> {
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#39;server&#39;</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;cloudflare&#39;</span>,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#39;X-Frame-Options&#39;</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;SAMEORIGIN&#39;</span>,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#39;X-Content-Type-Options&#39;</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;nosniff&#39;</span>,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#39;Referrer-Policy&#39;</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;strict-origin-when-cross-origin&#39;</span>,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#39;Permissions-Policy&#39;</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;interest-cohort=()&#39;</span>,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#39;Content-Security-Policy&#39;</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#34;default-src &#39;self&#39;; script-src &#39;self&#39; &#39;unsafe-inline&#39; &#39;unsafe-eval&#39;; style-src &#39;self&#39; &#39;unsafe-inline&#39;;&#34;</span>,
+</span></span><span style=display:flex><span>            <span style=color:#e6db74>&#39;X-Powered-By&#39;</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;Cloudflare&#39;</span>
+</span></span><span style=display:flex><span>        },
+</span></span><span style=display:flex><span>        <span style=color:#a6e22e>debug</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>true</span>
+</span></span><span style=display:flex><span>    };
+</span></span><span style=display:flex><span> }
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span> <span style=color:#66d9ef>async</span> <span style=color:#66d9ef>function</span> <span style=color:#a6e22e>logError</span>(<span style=color:#a6e22e>error</span>, <span style=color:#a6e22e>request</span>, <span style=color:#a6e22e>extra</span> <span style=color:#f92672>=</span> {}) {
+</span></span><span style=display:flex><span>    <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>error</span>(<span style=color:#e6db74>&#39;Error:&#39;</span>, {
+</span></span><span style=display:flex><span>        <span style=color:#a6e22e>message</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>error</span>.<span style=color:#a6e22e>message</span>,
+</span></span><span style=display:flex><span>        <span style=color:#a6e22e>stack</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>error</span>.<span style=color:#a6e22e>stack</span>,
+</span></span><span style=display:flex><span>        <span style=color:#a6e22e>url</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>request</span>.<span style=color:#a6e22e>url</span>,
+</span></span><span style=display:flex><span>        <span style=color:#a6e22e>method</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>request</span>.<span style=color:#a6e22e>method</span>,
+</span></span><span style=display:flex><span>        ...<span style=color:#a6e22e>extra</span>
+</span></span><span style=display:flex><span>    });
+</span></span><span style=display:flex><span> }
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span> <span style=color:#66d9ef>async</span> <span style=color:#66d9ef>function</span> <span style=color:#a6e22e>handleRequest</span>(<span style=color:#a6e22e>request</span>, <span style=color:#a6e22e>env</span>) {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>config</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>initializeConfig</span>({
+</span></span><span style=display:flex><span>        <span style=color:#a6e22e>GITHUB_PAGES</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>env</span>.<span style=color:#a6e22e>GITHUB_PAGES</span>,
+</span></span><span style=display:flex><span>        <span style=color:#a6e22e>CUSTOM_DOMAIN</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>env</span>.<span style=color:#a6e22e>CUSTOM_DOMAIN</span>,
+</span></span><span style=display:flex><span>        <span style=color:#a6e22e>WWW_DOMAIN</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>env</span>.<span style=color:#a6e22e>WWW_DOMAIN</span>,
+</span></span><span style=display:flex><span>        <span style=color:#a6e22e>WORKER_DOMAIN</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>env</span>.<span style=color:#a6e22e>WORKER_DOMAIN</span>
+</span></span><span style=display:flex><span>    });
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>const</span> { <span style=color:#a6e22e>domains</span> } <span style=color:#f92672>=</span> <span style=color:#a6e22e>config</span>;
+</span></span><span style=display:flex><span>    
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>try</span> {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>url</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>new</span> <span style=color:#a6e22e>URL</span>(<span style=color:#a6e22e>request</span>.<span style=color:#a6e22e>url</span>);
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>currentDomain</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>url</span>.<span style=color:#a6e22e>hostname</span>;
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// URL 编码处理
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>encodedPath</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>encodePathProperly</span>(<span style=color:#a6e22e>url</span>.<span style=color:#a6e22e>pathname</span>);
+</span></span><span style=display:flex><span>        <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#e6db74>&#39;URL encoding:&#39;</span>, {
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>originalPath</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>url</span>.<span style=color:#a6e22e>pathname</span>,
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>encodedPath</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>encodedPath</span>
+</span></span><span style=display:flex><span>        });
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// 详细的请求日志
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#e6db74>&#39;Request details:&#39;</span>, {
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>url</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>url</span>.<span style=color:#a6e22e>toString</span>(),
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>domain</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>currentDomain</span>,
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>path</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>encodedPath</span>,
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>allowedDomains</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>allowedDomains</span>,
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>method</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>request</span>.<span style=color:#a6e22e>method</span>,
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>headers</span><span style=color:#f92672>:</span> Object.<span style=color:#a6e22e>fromEntries</span>(<span style=color:#a6e22e>request</span>.<span style=color:#a6e22e>headers</span>)
+</span></span><span style=display:flex><span>        });
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// www 重定向到主域名
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>currentDomain</span> <span style=color:#f92672>===</span> <span style=color:#a6e22e>domains</span>.<span style=color:#a6e22e>WWW</span>) {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>newUrl</span> <span style=color:#f92672>=</span> <span style=color:#e6db74>`https://</span><span style=color:#e6db74>${</span><span style=color:#a6e22e>domains</span>.<span style=color:#a6e22e>CUSTOM</span><span style=color:#e6db74>}${</span><span style=color:#a6e22e>encodedPath</span><span style=color:#e6db74>}${</span><span style=color:#a6e22e>url</span>.<span style=color:#a6e22e>search</span><span style=color:#e6db74>}</span><span style=color:#e6db74>`</span>;
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#e6db74>&#39;Redirecting www to non-www:&#39;</span>, {
+</span></span><span style=display:flex><span>                <span style=color:#a6e22e>from</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>url</span>.<span style=color:#a6e22e>toString</span>(),
+</span></span><span style=display:flex><span>                <span style=color:#a6e22e>to</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>newUrl</span>
+</span></span><span style=display:flex><span>            });
+</span></span><span style=display:flex><span>            
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>new</span> <span style=color:#a6e22e>Response</span>(<span style=color:#66d9ef>null</span>, {
+</span></span><span style=display:flex><span>                <span style=color:#a6e22e>status</span><span style=color:#f92672>:</span> <span style=color:#ae81ff>301</span>,
+</span></span><span style=display:flex><span>                <span style=color:#a6e22e>headers</span><span style=color:#f92672>:</span> {
+</span></span><span style=display:flex><span>                    <span style=color:#e6db74>&#39;Location&#39;</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>newUrl</span>,
+</span></span><span style=display:flex><span>                    <span style=color:#e6db74>&#39;Cache-Control&#39;</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;no-cache, no-store, must-revalidate&#39;</span>,
+</span></span><span style=display:flex><span>                    <span style=color:#e6db74>&#39;Pragma&#39;</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;no-cache&#39;</span>,
+</span></span><span style=display:flex><span>                    <span style=color:#e6db74>&#39;Expires&#39;</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;0&#39;</span>,
+</span></span><span style=display:flex><span>                    <span style=color:#e6db74>&#39;server&#39;</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;cloudflare&#39;</span>
+</span></span><span style=display:flex><span>                }
+</span></span><span style=display:flex><span>            });
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// 验证域名
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span><span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>allowedDomains</span>.<span style=color:#a6e22e>includes</span>(<span style=color:#a6e22e>currentDomain</span>)) {
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>warn</span>(<span style=color:#e6db74>&#39;Invalid domain access:&#39;</span>, {
+</span></span><span style=display:flex><span>                <span style=color:#a6e22e>domain</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>currentDomain</span>,
+</span></span><span style=display:flex><span>                <span style=color:#a6e22e>allowedDomains</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>allowedDomains</span>
+</span></span><span style=display:flex><span>            });
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>new</span> <span style=color:#a6e22e>Response</span>(<span style=color:#e6db74>&#39;Domain not allowed&#39;</span>, { <span style=color:#a6e22e>status</span><span style=color:#f92672>:</span> <span style=color:#ae81ff>403</span> });
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// 构建 GitHub URL
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>githubUrl</span> <span style=color:#f92672>=</span> <span style=color:#e6db74>`https://</span><span style=color:#e6db74>${</span><span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>githubPages</span><span style=color:#e6db74>}${</span><span style=color:#a6e22e>encodedPath</span><span style=color:#e6db74>}${</span><span style=color:#a6e22e>url</span>.<span style=color:#a6e22e>search</span><span style=color:#e6db74>}</span><span style=color:#e6db74>`</span>;
+</span></span><span style=display:flex><span>        
+</span></span><span style=display:flex><span>        <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#e6db74>&#39;Proxying to GitHub:&#39;</span>, {
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>from</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>url</span>.<span style=color:#a6e22e>toString</span>(),
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>to</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>githubUrl</span>
+</span></span><span style=display:flex><span>        });
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// 获取文件扩展名
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>ext</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>encodedPath</span>.<span style=color:#a6e22e>split</span>(<span style=color:#e6db74>&#39;.&#39;</span>).<span style=color:#a6e22e>pop</span>().<span style=color:#a6e22e>toLowerCase</span>();
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>isAsset</span> <span style=color:#f92672>=</span> [<span style=color:#e6db74>&#39;png&#39;</span>, <span style=color:#e6db74>&#39;jpg&#39;</span>, <span style=color:#e6db74>&#39;jpeg&#39;</span>, <span style=color:#e6db74>&#39;gif&#39;</span>, <span style=color:#e6db74>&#39;webp&#39;</span>, <span style=color:#e6db74>&#39;css&#39;</span>, <span style=color:#e6db74>&#39;js&#39;</span>, <span style=color:#e6db74>&#39;svg&#39;</span>, <span style=color:#e6db74>&#39;ico&#39;</span>, <span style=color:#e6db74>&#39;woff&#39;</span>, <span style=color:#e6db74>&#39;woff2&#39;</span>, <span style=color:#e6db74>&#39;ttf&#39;</span>].<span style=color:#a6e22e>includes</span>(<span style=color:#a6e22e>ext</span>);
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// 处理请求头
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>let</span> <span style=color:#a6e22e>newHeaders</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>new</span> <span style=color:#a6e22e>Headers</span>(<span style=color:#a6e22e>request</span>.<span style=color:#a6e22e>headers</span>);
+</span></span><span style=display:flex><span>        
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// 清理敏感请求头
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        [<span style=color:#e6db74>&#39;referer&#39;</span>, <span style=color:#e6db74>&#39;origin&#39;</span>, <span style=color:#e6db74>&#39;x-real-ip&#39;</span>, <span style=color:#e6db74>&#39;cf-connecting-ip&#39;</span>, <span style=color:#e6db74>&#39;x-forwarded-for&#39;</span>, <span style=color:#e6db74>&#39;x-forwarded-proto&#39;</span>, <span style=color:#e6db74>&#39;cookie&#39;</span>].<span style=color:#a6e22e>forEach</span>(<span style=color:#a6e22e>header</span> =&gt; {
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>newHeaders</span>.<span style=color:#66d9ef>delete</span>(<span style=color:#a6e22e>header</span>);
+</span></span><span style=display:flex><span>        });
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// 设置新的请求头
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#a6e22e>newHeaders</span>.<span style=color:#a6e22e>set</span>(<span style=color:#e6db74>&#39;Host&#39;</span>, <span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>githubPages</span>);
+</span></span><span style=display:flex><span>        <span style=color:#a6e22e>newHeaders</span>.<span style=color:#a6e22e>set</span>(<span style=color:#e6db74>&#39;Accept-Encoding&#39;</span>, <span style=color:#e6db74>&#39;gzip, deflate, br&#39;</span>);
+</span></span><span style=display:flex><span>        <span style=color:#a6e22e>newHeaders</span>.<span style=color:#a6e22e>set</span>(<span style=color:#e6db74>&#39;User-Agent&#39;</span>, <span style=color:#a6e22e>request</span>.<span style=color:#a6e22e>headers</span>.<span style=color:#a6e22e>get</span>(<span style=color:#e6db74>&#39;User-Agent&#39;</span>) <span style=color:#f92672>||</span> <span style=color:#e6db74>&#39;Cloudflare Worker&#39;</span>);
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// 创建 GitHub 请求
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>githubRequest</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>new</span> <span style=color:#a6e22e>Request</span>(<span style=color:#a6e22e>githubUrl</span>, {
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>method</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>request</span>.<span style=color:#a6e22e>method</span>,
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>headers</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>newHeaders</span>,
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>redirect</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>isAsset</span> <span style=color:#f92672>?</span> <span style=color:#e6db74>&#39;follow&#39;</span> <span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;manual&#39;</span>,
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>cf</span><span style=color:#f92672>:</span> {
+</span></span><span style=display:flex><span>                <span style=color:#a6e22e>cacheEverything</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>false</span>,
+</span></span><span style=display:flex><span>                <span style=color:#a6e22e>cacheTtl</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>isAsset</span> <span style=color:#f92672>?</span> <span style=color:#ae81ff>86400</span> <span style=color:#f92672>:</span> <span style=color:#ae81ff>0</span>,
+</span></span><span style=display:flex><span>                <span style=color:#a6e22e>timeout</span><span style=color:#f92672>:</span> <span style=color:#ae81ff>30000</span>
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>        });
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// 发送请求到 GitHub Pages
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>let</span> <span style=color:#a6e22e>response</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>await</span> <span style=color:#a6e22e>fetch</span>(<span style=color:#a6e22e>githubRequest</span>);
+</span></span><span style=display:flex><span>        
+</span></span><span style=display:flex><span>        <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#e6db74>&#39;GitHub response:&#39;</span>, {
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>status</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>response</span>.<span style=color:#a6e22e>status</span>,
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>statusText</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>response</span>.<span style=color:#a6e22e>statusText</span>,
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>headers</span><span style=color:#f92672>:</span> Object.<span style=color:#a6e22e>fromEntries</span>(<span style=color:#a6e22e>response</span>.<span style=color:#a6e22e>headers</span>),
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>url</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>githubUrl</span>
+</span></span><span style=display:flex><span>        });
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// 如果是 404，增加调试日志
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>response</span>.<span style=color:#a6e22e>status</span> <span style=color:#f92672>===</span> <span style=color:#ae81ff>404</span>) {
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#e6db74>&#39;404 Error details:&#39;</span>, {
+</span></span><span style=display:flex><span>                <span style=color:#a6e22e>githubUrl</span>,
+</span></span><span style=display:flex><span>                <span style=color:#a6e22e>originalUrl</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>request</span>.<span style=color:#a6e22e>url</span>,
+</span></span><span style=display:flex><span>                <span style=color:#a6e22e>headers</span><span style=color:#f92672>:</span> Object.<span style=color:#a6e22e>fromEntries</span>(<span style=color:#a6e22e>response</span>.<span style=color:#a6e22e>headers</span>),
+</span></span><span style=display:flex><span>                <span style=color:#a6e22e>domain</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>currentDomain</span>,
+</span></span><span style=display:flex><span>                <span style=color:#a6e22e>githubPages</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>githubPages</span>
+</span></span><span style=display:flex><span>            });
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// 尝试直接访问 GitHub Pages
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#66d9ef>try</span> {
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>testResponse</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>await</span> <span style=color:#a6e22e>fetch</span>(<span style=color:#e6db74>`https://</span><span style=color:#e6db74>${</span><span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>githubPages</span><span style=color:#e6db74>}${</span><span style=color:#a6e22e>encodedPath</span><span style=color:#e6db74>}</span><span style=color:#e6db74>`</span>);
+</span></span><span style=display:flex><span>                <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#e6db74>&#39;Direct GitHub test:&#39;</span>, {
+</span></span><span style=display:flex><span>                    <span style=color:#a6e22e>status</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>testResponse</span>.<span style=color:#a6e22e>status</span>,
+</span></span><span style=display:flex><span>                    <span style=color:#a6e22e>headers</span><span style=color:#f92672>:</span> Object.<span style=color:#a6e22e>fromEntries</span>(<span style=color:#a6e22e>testResponse</span>.<span style=color:#a6e22e>headers</span>)
+</span></span><span style=display:flex><span>                });
+</span></span><span style=display:flex><span>            } <span style=color:#66d9ef>catch</span> (<span style=color:#a6e22e>error</span>) {
+</span></span><span style=display:flex><span>                <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>error</span>(<span style=color:#e6db74>&#39;Direct GitHub test failed:&#39;</span>, <span style=color:#a6e22e>error</span>);
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// 处理资源文件
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>isAsset</span>) {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>let</span> <span style=color:#a6e22e>newResponse</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>new</span> <span style=color:#a6e22e>Response</span>(<span style=color:#a6e22e>response</span>.<span style=color:#a6e22e>body</span>, {
+</span></span><span style=display:flex><span>                <span style=color:#a6e22e>status</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>response</span>.<span style=color:#a6e22e>status</span>,
+</span></span><span style=display:flex><span>                <span style=color:#a6e22e>statusText</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>response</span>.<span style=color:#a6e22e>statusText</span>,
+</span></span><span style=display:flex><span>                <span style=color:#a6e22e>headers</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>new</span> <span style=color:#a6e22e>Headers</span>(<span style=color:#a6e22e>response</span>.<span style=color:#a6e22e>headers</span>)
+</span></span><span style=display:flex><span>            });
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>allowedHeaders</span> <span style=color:#f92672>=</span> [
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#39;content-type&#39;</span>,
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#39;content-length&#39;</span>,
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#39;cache-control&#39;</span>,
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#39;content-encoding&#39;</span>,
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#39;etag&#39;</span>,
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#39;last-modified&#39;</span>
+</span></span><span style=display:flex><span>            ];
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>for</span> (<span style=color:#66d9ef>const</span> <span style=color:#a6e22e>key</span> <span style=color:#66d9ef>of</span> [...<span style=color:#a6e22e>newResponse</span>.<span style=color:#a6e22e>headers</span>.<span style=color:#a6e22e>keys</span>()]) {
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>if</span> (<span style=color:#f92672>!</span><span style=color:#a6e22e>allowedHeaders</span>.<span style=color:#a6e22e>includes</span>(<span style=color:#a6e22e>key</span>.<span style=color:#a6e22e>toLowerCase</span>())) {
+</span></span><span style=display:flex><span>                    <span style=color:#a6e22e>newResponse</span>.<span style=color:#a6e22e>headers</span>.<span style=color:#66d9ef>delete</span>(<span style=color:#a6e22e>key</span>);
+</span></span><span style=display:flex><span>                }
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>response</span>.<span style=color:#a6e22e>ok</span>) {
+</span></span><span style=display:flex><span>                <span style=color:#a6e22e>newResponse</span>.<span style=color:#a6e22e>headers</span>.<span style=color:#a6e22e>set</span>(<span style=color:#e6db74>&#39;Cache-Control&#39;</span>, <span style=color:#e6db74>&#39;public, max-age=31536000&#39;</span>);
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>newResponse</span>;
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// 处理重定向
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>if</span> ([<span style=color:#ae81ff>301</span>, <span style=color:#ae81ff>302</span>, <span style=color:#ae81ff>307</span>, <span style=color:#ae81ff>308</span>].<span style=color:#a6e22e>includes</span>(<span style=color:#a6e22e>response</span>.<span style=color:#a6e22e>status</span>)) {
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>location</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>response</span>.<span style=color:#a6e22e>headers</span>.<span style=color:#a6e22e>get</span>(<span style=color:#e6db74>&#39;Location&#39;</span>);
+</span></span><span style=display:flex><span>            
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#e6db74>&#39;Handling redirect:&#39;</span>, {
+</span></span><span style=display:flex><span>                <span style=color:#a6e22e>from</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>url</span>.<span style=color:#a6e22e>toString</span>(),
+</span></span><span style=display:flex><span>                <span style=color:#a6e22e>location</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>location</span>
+</span></span><span style=display:flex><span>            });
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>location</span>) {
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>redirectUrl</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>new</span> <span style=color:#a6e22e>URL</span>(<span style=color:#a6e22e>location</span>.<span style=color:#a6e22e>startsWith</span>(<span style=color:#e6db74>&#39;http&#39;</span>) <span style=color:#f92672>?</span> <span style=color:#a6e22e>location</span> <span style=color:#f92672>:</span> <span style=color:#e6db74>`https://</span><span style=color:#e6db74>${</span><span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>githubPages</span><span style=color:#e6db74>}${</span><span style=color:#a6e22e>location</span><span style=color:#e6db74>}</span><span style=color:#e6db74>`</span>);
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>newLocation</span> <span style=color:#f92672>=</span> <span style=color:#e6db74>`https://</span><span style=color:#e6db74>${</span><span style=color:#a6e22e>currentDomain</span><span style=color:#e6db74>}${</span><span style=color:#a6e22e>redirectUrl</span>.<span style=color:#a6e22e>pathname</span><span style=color:#e6db74>}${</span><span style=color:#a6e22e>redirectUrl</span>.<span style=color:#a6e22e>search</span><span style=color:#e6db74>}</span><span style=color:#e6db74>`</span>;
+</span></span><span style=display:flex><span>                
+</span></span><span style=display:flex><span>                <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#e6db74>&#39;New redirect location:&#39;</span>, <span style=color:#a6e22e>newLocation</span>);
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>new</span> <span style=color:#a6e22e>Response</span>(<span style=color:#66d9ef>null</span>, {
+</span></span><span style=display:flex><span>                    <span style=color:#a6e22e>status</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>response</span>.<span style=color:#a6e22e>status</span>,
+</span></span><span style=display:flex><span>                    <span style=color:#a6e22e>headers</span><span style=color:#f92672>:</span> {
+</span></span><span style=display:flex><span>                        <span style=color:#e6db74>&#39;Location&#39;</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>newLocation</span>,
+</span></span><span style=display:flex><span>                        <span style=color:#e6db74>&#39;Cache-Control&#39;</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;no-cache, no-store, must-revalidate&#39;</span>,
+</span></span><span style=display:flex><span>                        <span style=color:#e6db74>&#39;Pragma&#39;</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;no-cache&#39;</span>,
+</span></span><span style=display:flex><span>                        <span style=color:#e6db74>&#39;Expires&#39;</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;0&#39;</span>,
+</span></span><span style=display:flex><span>                        <span style=color:#e6db74>&#39;server&#39;</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;cloudflare&#39;</span>
+</span></span><span style=display:flex><span>                    }
+</span></span><span style=display:flex><span>                });
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// 读取响应体
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>let</span> <span style=color:#a6e22e>body</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>await</span> <span style=color:#a6e22e>response</span>.<span style=color:#a6e22e>text</span>();
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// 替换规则
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>replacements</span> <span style=color:#f92672>=</span> [
+</span></span><span style=display:flex><span>            [<span style=color:#66d9ef>new</span> RegExp(<span style=color:#e6db74>`https?://</span><span style=color:#e6db74>${</span><span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>githubPages</span><span style=color:#e6db74>}</span><span style=color:#e6db74>`</span>, <span style=color:#e6db74>&#39;g&#39;</span>), <span style=color:#e6db74>`https://</span><span style=color:#e6db74>${</span><span style=color:#a6e22e>currentDomain</span><span style=color:#e6db74>}</span><span style=color:#e6db74>`</span>],
+</span></span><span style=display:flex><span>            [<span style=color:#e6db74>`</span><span style=color:#e6db74>${</span><span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>githubPages</span><span style=color:#e6db74>}</span><span style=color:#e6db74>`</span>, <span style=color:#a6e22e>currentDomain</span>],
+</span></span><span style=display:flex><span>            [<span style=color:#e6db74>/href=&#34;\//g</span>, <span style=color:#e6db74>`href=&#34;https://</span><span style=color:#e6db74>${</span><span style=color:#a6e22e>currentDomain</span><span style=color:#e6db74>}</span><span style=color:#e6db74>/`</span>],
+</span></span><span style=display:flex><span>            [<span style=color:#e6db74>/src=&#34;\//g</span>, <span style=color:#e6db74>`src=&#34;https://</span><span style=color:#e6db74>${</span><span style=color:#a6e22e>currentDomain</span><span style=color:#e6db74>}</span><span style=color:#e6db74>/`</span>],
+</span></span><span style=display:flex><span>            [<span style=color:#e6db74>/src=&#34;([^&#34;]+)&#34;/g</span>, (<span style=color:#a6e22e>match</span>, <span style=color:#a6e22e>p1</span>) =&gt; {
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>p1</span>.<span style=color:#a6e22e>startsWith</span>(<span style=color:#e6db74>&#39;http&#39;</span>)) {
+</span></span><span style=display:flex><span>                    <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>match</span>.<span style=color:#a6e22e>replace</span>(<span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>githubPages</span>, <span style=color:#a6e22e>currentDomain</span>);
+</span></span><span style=display:flex><span>                } <span style=color:#66d9ef>else</span> <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>p1</span>.<span style=color:#a6e22e>startsWith</span>(<span style=color:#e6db74>&#39;/&#39;</span>)) {
+</span></span><span style=display:flex><span>                    <span style=color:#66d9ef>return</span> <span style=color:#e6db74>`src=&#34;https://</span><span style=color:#e6db74>${</span><span style=color:#a6e22e>currentDomain</span><span style=color:#e6db74>}${</span><span style=color:#a6e22e>p1</span><span style=color:#e6db74>}</span><span style=color:#e6db74>&#34;`</span>;
+</span></span><span style=display:flex><span>                }
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>match</span>;
+</span></span><span style=display:flex><span>            }],
+</span></span><span style=display:flex><span>            [<span style=color:#e6db74>/srcset=&#34;([^&#34;]+)&#34;/g</span>, (<span style=color:#a6e22e>match</span>, <span style=color:#a6e22e>p1</span>) =&gt; {
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>return</span> <span style=color:#e6db74>`srcset=&#34;</span><span style=color:#e6db74>${</span><span style=color:#a6e22e>p1</span>.<span style=color:#a6e22e>split</span>(<span style=color:#e6db74>&#39;,&#39;</span>).<span style=color:#a6e22e>map</span>(<span style=color:#a6e22e>src</span> =&gt; {
+</span></span><span style=display:flex><span>                    <span style=color:#66d9ef>const</span> [<span style=color:#a6e22e>url</span>, <span style=color:#a6e22e>size</span>] <span style=color:#f92672>=</span> <span style=color:#a6e22e>src</span>.<span style=color:#a6e22e>trim</span>().<span style=color:#a6e22e>split</span>(<span style=color:#e6db74>&#39; &#39;</span>);
+</span></span><span style=display:flex><span>                    <span style=color:#66d9ef>if</span> (<span style=color:#a6e22e>url</span>.<span style=color:#a6e22e>startsWith</span>(<span style=color:#e6db74>&#39;http&#39;</span>)) {
+</span></span><span style=display:flex><span>                        <span style=color:#66d9ef>return</span> <span style=color:#e6db74>`</span><span style=color:#e6db74>${</span><span style=color:#a6e22e>url</span>.<span style=color:#a6e22e>replace</span>(<span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>githubPages</span>, <span style=color:#a6e22e>currentDomain</span>)<span style=color:#e6db74>}</span><span style=color:#e6db74> </span><span style=color:#e6db74>${</span><span style=color:#a6e22e>size</span> <span style=color:#f92672>||</span> <span style=color:#e6db74>&#39;&#39;</span><span style=color:#e6db74>}</span><span style=color:#e6db74>`</span>;
+</span></span><span style=display:flex><span>                    <span style=color:#e6db74>}</span><span style=color:#e6db74> else if (url.startsWith(&#39;/&#39;)) {
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>                        return `</span><span style=color:#a6e22e>https</span><span style=color:#f92672>:</span><span style=color:#75715e>//${currentDomain}${url} ${size || &#39;&#39;}`;
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>                    }
+</span></span><span style=display:flex><span>                    <span style=color:#66d9ef>return</span> <span style=color:#e6db74>`</span><span style=color:#e6db74>${</span><span style=color:#a6e22e>url</span><span style=color:#e6db74>}</span><span style=color:#e6db74> </span><span style=color:#e6db74>${</span><span style=color:#a6e22e>size</span> <span style=color:#f92672>||</span> <span style=color:#e6db74>&#39;&#39;</span><span style=color:#e6db74>}</span><span style=color:#e6db74>`</span>;
+</span></span><span style=display:flex><span>                }).<span style=color:#a6e22e>join</span>(<span style=color:#e6db74>&#39;, &#39;</span>)}<span style=color:#e6db74>&#34;`;
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>            }],
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>            [/&lt;meta[^&gt;]*?content=&#34;</span>[<span style=color:#f92672>^</span><span style=color:#e6db74>&#34;]*?github\.io[^&#34;</span>]<span style=color:#f92672>*?</span><span style=color:#e6db74>&#34;[^&gt;]*?&gt;/g, (match) =&gt; {
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>                return match.replace(config.githubPages, currentDomain);
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>            }],
+</span></span></span><span style=display:flex><span><span style=color:#e6db74>            [/&lt;link[^&gt;]*?rel=&#34;</span><span style=color:#a6e22e>canonical</span><span style=color:#e6db74>&#34;[^&gt;]*?href=&#34;</span>[<span style=color:#f92672>^</span><span style=color:#e6db74>&#34;]*?&#34;</span>[<span style=color:#f92672>^&gt;</span>]<span style=color:#f92672>*?&gt;</span><span style=color:#960050;background-color:#1e0010>/g, (match) =&gt; {</span>
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>match</span>.<span style=color:#a6e22e>replace</span>(<span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>githubPages</span>, <span style=color:#a6e22e>currentDomain</span>);
+</span></span><span style=display:flex><span>            }],
+</span></span><span style=display:flex><span>            [<span style=color:#e6db74>/&lt;script type=&#34;application\/ld\+json&#34;&gt;[^&lt;]*?&lt;\/script&gt;/g</span>, (<span style=color:#a6e22e>match</span>) =&gt; {
+</span></span><span style=display:flex><span>                <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>match</span>.<span style=color:#a6e22e>replace</span>(<span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>githubPages</span>, <span style=color:#a6e22e>currentDomain</span>);
+</span></span><span style=display:flex><span>            }]
+</span></span><span style=display:flex><span>        ];
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// 应用替换规则
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#a6e22e>replacements</span>.<span style=color:#a6e22e>forEach</span>(([<span style=color:#a6e22e>pattern</span>, <span style=color:#a6e22e>replacement</span>]) =&gt; {
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>body</span> <span style=color:#f92672>=</span> <span style=color:#a6e22e>body</span>.<span style=color:#a6e22e>replace</span>(<span style=color:#a6e22e>pattern</span>, <span style=color:#a6e22e>replacement</span>);
+</span></span><span style=display:flex><span>        });
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// 创建最终响应
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#66d9ef>let</span> <span style=color:#a6e22e>newResponse</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>new</span> <span style=color:#a6e22e>Response</span>(<span style=color:#a6e22e>body</span>, {
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>status</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>response</span>.<span style=color:#a6e22e>status</span>,
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>statusText</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>response</span>.<span style=color:#a6e22e>statusText</span>,
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>headers</span><span style=color:#f92672>:</span> <span style=color:#66d9ef>new</span> <span style=color:#a6e22e>Headers</span>({
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#39;Content-Type&#39;</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>response</span>.<span style=color:#a6e22e>headers</span>.<span style=color:#a6e22e>get</span>(<span style=color:#e6db74>&#39;Content-Type&#39;</span>) <span style=color:#f92672>||</span> <span style=color:#e6db74>&#39;text/html;charset=UTF-8&#39;</span>,
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#39;Cache-Control&#39;</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;no-cache, no-store, must-revalidate&#39;</span>,
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#39;Pragma&#39;</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;no-cache&#39;</span>,
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#39;Expires&#39;</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;0&#39;</span>
+</span></span><span style=display:flex><span>            })
+</span></span><span style=display:flex><span>        });
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// 添加安全头部
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>sensitiveHeaders</span>.<span style=color:#a6e22e>forEach</span>(<span style=color:#a6e22e>header</span> =&gt; {
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>newResponse</span>.<span style=color:#a6e22e>headers</span>.<span style=color:#66d9ef>delete</span>(<span style=color:#a6e22e>header</span>);
+</span></span><span style=display:flex><span>        });
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span>        Object.<span style=color:#a6e22e>entries</span>(<span style=color:#a6e22e>config</span>.<span style=color:#a6e22e>customHeaders</span>).<span style=color:#a6e22e>forEach</span>(([<span style=color:#a6e22e>key</span>, <span style=color:#a6e22e>value</span>]) =&gt; {
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>newResponse</span>.<span style=color:#a6e22e>headers</span>.<span style=color:#a6e22e>set</span>(<span style=color:#a6e22e>key</span>, <span style=color:#a6e22e>value</span>);
+</span></span><span style=display:flex><span>        });
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>newResponse</span>;
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span>    } <span style=color:#66d9ef>catch</span> (<span style=color:#a6e22e>err</span>) {
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>await</span> <span style=color:#a6e22e>logError</span>(<span style=color:#a6e22e>err</span>, <span style=color:#a6e22e>request</span>);
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>new</span> <span style=color:#a6e22e>Response</span>(<span style=color:#e6db74>`Error: </span><span style=color:#e6db74>${</span><span style=color:#a6e22e>err</span>.<span style=color:#a6e22e>message</span><span style=color:#e6db74>}</span><span style=color:#e6db74>`</span>, { 
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>status</span><span style=color:#f92672>:</span> <span style=color:#ae81ff>500</span>,
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>headers</span><span style=color:#f92672>:</span> {
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#39;Content-Type&#39;</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;text/plain&#39;</span>,
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#39;Cache-Control&#39;</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;no-cache, no-store, must-revalidate&#39;</span>,
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#39;Pragma&#39;</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;no-cache&#39;</span>,
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#39;Expires&#39;</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;0&#39;</span>,
+</span></span><span style=display:flex><span>                <span style=color:#e6db74>&#39;server&#39;</span><span style=color:#f92672>:</span> <span style=color:#e6db74>&#39;cloudflare&#39;</span>
+</span></span><span style=display:flex><span>            }
+</span></span><span style=display:flex><span>        });
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span> }
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span> <span style=color:#66d9ef>export</span> <span style=color:#66d9ef>default</span> {
+</span></span><span style=display:flex><span>    <span style=color:#66d9ef>async</span> <span style=color:#a6e22e>fetch</span>(<span style=color:#a6e22e>request</span>, <span style=color:#a6e22e>env</span>, <span style=color:#a6e22e>ctx</span>) {
+</span></span><span style=display:flex><span>        <span style=color:#75715e>// 记录环境变量状态
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>        <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#e6db74>&#39;Environment variables:&#39;</span>, {
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>GITHUB_PAGES</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>env</span>.<span style=color:#a6e22e>GITHUB_PAGES</span>,
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>CUSTOM_DOMAIN</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>env</span>.<span style=color:#a6e22e>CUSTOM_DOMAIN</span>,
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>WWW_DOMAIN</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>env</span>.<span style=color:#a6e22e>WWW_DOMAIN</span>,
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>WORKER_DOMAIN</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>env</span>.<span style=color:#a6e22e>WORKER_DOMAIN</span>
+</span></span><span style=display:flex><span>        });
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span>        <span style=color:#66d9ef>try</span> {
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// 记录请求信息
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#e6db74>&#39;Incoming request:&#39;</span>, {
+</span></span><span style=display:flex><span>                <span style=color:#a6e22e>url</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>request</span>.<span style=color:#a6e22e>url</span>,
+</span></span><span style=display:flex><span>                <span style=color:#a6e22e>method</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>request</span>.<span style=color:#a6e22e>method</span>,
+</span></span><span style=display:flex><span>                <span style=color:#a6e22e>headers</span><span style=color:#f92672>:</span> Object.<span style=color:#a6e22e>fromEntries</span>(<span style=color:#a6e22e>request</span>.<span style=color:#a6e22e>headers</span>)
+</span></span><span style=display:flex><span>            });
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>const</span> <span style=color:#a6e22e>response</span> <span style=color:#f92672>=</span> <span style=color:#66d9ef>await</span> <span style=color:#a6e22e>handleRequest</span>(<span style=color:#a6e22e>request</span>, <span style=color:#a6e22e>env</span>);
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span>            <span style=color:#75715e>// 记录响应信息
+</span></span></span><span style=display:flex><span><span style=color:#75715e></span>            <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>log</span>(<span style=color:#e6db74>&#39;Response details:&#39;</span>, {
+</span></span><span style=display:flex><span>                <span style=color:#a6e22e>status</span><span style=color:#f92672>:</span> <span style=color:#a6e22e>response</span>.<span style=color:#a6e22e>status</span>,
+</span></span><span style=display:flex><span>                <span style=color:#a6e22e>headers</span><span style=color:#f92672>:</span> Object.<span style=color:#a6e22e>fromEntries</span>(<span style=color:#a6e22e>response</span>.<span style=color:#a6e22e>headers</span>)
+</span></span><span style=display:flex><span>            });
+</span></span><span style=display:flex><span> 
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>return</span> <span style=color:#a6e22e>response</span>;
+</span></span><span style=display:flex><span>        } <span style=color:#66d9ef>catch</span> (<span style=color:#a6e22e>error</span>) {
+</span></span><span style=display:flex><span>            <span style=color:#a6e22e>console</span>.<span style=color:#a6e22e>error</span>(<span style=color:#e6db74>&#39;Fatal error:&#39;</span>, <span style=color:#a6e22e>error</span>);
+</span></span><span style=display:flex><span>            <span style=color:#66d9ef>return</span> <span style=color:#66d9ef>new</span> <span style=color:#a6e22e>Response</span>(<span style=color:#e6db74>&#39;Internal Server Error&#39;</span>, { <span style=color:#a6e22e>status</span><span style=color:#f92672>:</span> <span style=color:#ae81ff>500</span> });
+</span></span><span style=display:flex><span>        }
+</span></span><span style=display:flex><span>    }
+</span></span><span style=display:flex><span> };
+</span></span></code></pre></div></div></div><h3 id=2-配置dns解析>2. 配置DNS解析<a hidden class=anchor aria-hidden=true href=#2-配置dns解析>#</a></h3><p>要将自定义域名指向 Worker，需要完成以下配置：</p><ol><li>进入 Cloudflare Worker 设置页面</li><li>在"自定义域名"(Custom Domains)选项下</li><li>依次添加域名 <code>user.me</code> 和 <code>www.user.me</code>（Cloudflare 将自动创建对应的 DNS 记录）</li><li>在"路由"(Zone Routes)中添加以下区域： <code>user.me</code>, 路由：<code>user.me/*</code> 和 <code>www.user.me/*</code></li></ol><p>最后结果如下：</p><pre tabindex=0><code>workers.dev 子域名：hide-ghpage.user.workers.dev
+自定义域：user.me
+自定义域：www.user.me
+路由：user.me/*
+路由：www.user.me/*
+</code></pre><h4 id=自定义域名与区域路由的区别>自定义域名与区域路由的区别<a hidden class=anchor aria-hidden=true href=#自定义域名与区域路由的区别>#</a></h4><ul><li><strong>自定义域名</strong>：声明某个域名可以使用该 Worker 服务</li><li><strong>区域路由</strong>：定义 Worker 具体要处理的 URL 访问规则</li></ul><p>举例说明：如果只配置了自定义域名而没有添加路由规则，Worker 虽然知道它可以为 <code>user.me</code> 提供服务，但不清楚具体要处理哪些 URL 请求。</p><blockquote><p><strong>重要提醒</strong>
+完成以上配置后，请务必：</p><ul><li>删除所有指向 GitHub IP 的 A 记录</li><li>删除所有指向 <code>user.github.io</code> 的 CNAME 记录</li><li>仅保留指向 Worker 的 DNS 记录</li></ul></blockquote><p>这样可以确保所有流量都经过 Worker 处理，从而实现完整的域名代理功能。</p><h3 id=3-配置ssltls>3. 配置SSL/TLS<a hidden class=anchor aria-hidden=true href=#3-配置ssltls>#</a></h3><p>为确保安全访问，需要正确配置SSL：</p><ol><li><p><strong>SSL/TLS > 概述</strong></p><ul><li>选择"完全"(Full)模式</li></ul></li><li><p><strong>SSL/TLS > 边缘证书</strong></p><ul><li>✅ 启用"始终使用HTTPS"</li><li>✅ 启用"自动HTTPS重写"</li></ul></li></ol><p>这样可以确保：</p><ul><li>HTTP自动跳转HTTPS</li><li>所有子域名启用HTTPS</li><li>自动修复混合内容问题</li></ul><h3 id=4-配置缓存规则>4. 配置缓存规则<a hidden class=anchor aria-hidden=true href=#4-配置缓存规则>#</a></h3><p>为提升访问速度，建议配置以下缓存规则：</p><ol><li><strong>创建新规则</strong></li></ol><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-plaintext data-lang=plaintext><span style=display:flex><span>规则名称：静态资源缓存
+</span></span><span style=display:flex><span>匹配条件：所有传入请求
+</span></span></code></pre></div><ol start=2><li><strong>设置缓存条件</strong></li></ol><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-plaintext data-lang=plaintext><span style=display:flex><span>字段：URI 完整
+</span></span><span style=display:flex><span>运算符：通配符
+</span></span><span style=display:flex><span>值：https://user.me/*.(css|js|jpg|jpeg|png|gif|ico|svg|woff|woff2|ttf)
+</span></span></code></pre></div><ol start=3><li><strong>配置缓存参数</strong></li></ol><div class=highlight><pre tabindex=0 style=color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4><code class=language-plaintext data-lang=plaintext><span style=display:flex><span>缓存资格：符合缓存条件
+</span></span><span style=display:flex><span>边缘TTL：4小时
+</span></span><span style=display:flex><span>浏览器TTL：4小时
+</span></span></code></pre></div><p>缓存配置说明：</p><ul><li>静态资源默认缓存4小时</li><li>同时在CDN节点和浏览器端缓存</li><li>可根据需求调整缓存时间<ul><li>频繁更新的资源建议缩短时间</li><li>稳定资源可适当延长</li></ul></li></ul><p>通过以上配置，我们成功实现了：</p><ul><li>隐藏GitHub Pages源站</li><li>提升访问速度</li><li>增强安全性</li><li>优化用户体验</li></ul><h2 id=注意事项>注意事项<a hidden class=anchor aria-hidden=true href=#注意事项>#</a></h2><p>如果完成上述配置还无法正常访问，可以尝试：</p><ul><li>在cf上清楚<code>user.me</code> 和 <code>www.user.me</code> 的dns 缓存</li><li>本地清除dns缓存</li><li>删除浏览器的浏览记录和cookies</li><li>如果设置了页面规则"从 WWW 重定向到根"，请删除</li><li>尝试先通过<code>https://hide-ghpage.user.workers.dev</code>访问</li><li>尝试在浏览器的无痕模式访问<code>user.me</code></li></ul><h2 id=总结>总结<a hidden class=anchor aria-hidden=true href=#总结>#</a></h2><p>通过上述设置，应该可以实现Cloudflare Workers 代理 GitHub Pages，并隐藏原始的域名地址。</p></div><footer class=post-footer><ul class=post-tags><li><a href=https://shenghairong.github.io/tags/tutorial/>Tutorial</a></li><li><a href=https://shenghairong.github.io/tags/website/>Website</a></li></ul><nav class=paginav><a class=next href=https://shenghairong.github.io/posts/2024-11-11-oneapi_cursor/><span class=title>Next »</span><br><span>通过CF Worker代理第三方api在Cursor中使用Claude</span></a></nav></footer></article></main><footer class=footer><span>&copy; 2024 <a href=https://shenghairong.github.io/>Shawn's Blog</a></span> ·
+<span>Powered by
+<a href=https://gohugo.io/ rel="noopener noreferrer" target=_blank>Hugo</a> &
+        <a href=https://github.com/adityatelange/hugo-PaperMod/ rel=noopener target=_blank>PaperMod</a></span></footer><a href=#top aria-label="go to top" title="Go to Top (Alt + G)" class=top-link id=top-link accesskey=g><svg viewBox="0 0 12 6" fill="currentcolor"><path d="M12 6H0l6-6z"/></svg>
+</a><script>let menu=document.getElementById("menu");menu&&(menu.scrollLeft=localStorage.getItem("menu-scroll-position"),menu.onscroll=function(){localStorage.setItem("menu-scroll-position",menu.scrollLeft)}),document.querySelectorAll('a[href^="#"]').forEach(e=>{e.addEventListener("click",function(e){e.preventDefault();var t=this.getAttribute("href").substr(1);window.matchMedia("(prefers-reduced-motion: reduce)").matches?document.querySelector(`[id='${decodeURIComponent(t)}']`).scrollIntoView():document.querySelector(`[id='${decodeURIComponent(t)}']`).scrollIntoView({behavior:"smooth"}),t==="top"?history.replaceState(null,null," "):history.pushState(null,null,`#${t}`)})})</script><script>var mybutton=document.getElementById("top-link");window.onscroll=function(){document.body.scrollTop>800||document.documentElement.scrollTop>800?(mybutton.style.visibility="visible",mybutton.style.opacity="1"):(mybutton.style.visibility="hidden",mybutton.style.opacity="0")}</script><script>document.getElementById("theme-toggle").addEventListener("click",()=>{document.body.className.includes("dark")?(document.body.classList.remove("dark"),localStorage.setItem("pref-theme","light")):(document.body.classList.add("dark"),localStorage.setItem("pref-theme","dark"))})</script><script>document.querySelectorAll("pre > code").forEach(e=>{const n=e.parentNode.parentNode,t=document.createElement("button");t.classList.add("copy-code"),t.innerHTML="copy";function s(){t.innerHTML="copied!",setTimeout(()=>{t.innerHTML="copy"},2e3)}t.addEventListener("click",t=>{if("clipboard"in navigator){navigator.clipboard.writeText(e.textContent),s();return}const n=document.createRange();n.selectNodeContents(e);const o=window.getSelection();o.removeAllRanges(),o.addRange(n);try{document.execCommand("copy"),s()}catch{}o.removeRange(n)}),n.classList.contains("highlight")?n.appendChild(t):n.parentNode.firstChild==n||(e.parentNode.parentNode.parentNode.parentNode.parentNode.nodeName=="TABLE"?e.parentNode.parentNode.parentNode.parentNode.parentNode.appendChild(t):e.parentNode.appendChild(t))})</script></body></html>
