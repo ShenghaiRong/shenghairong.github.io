@@ -1,4 +1,104 @@
-<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>Shawn's Blog</title><link>https://shenghairong.github.io/</link><description>Recent content on Shawn's Blog</description><generator>Hugo -- 0.138.0</generator><language>en-us</language><lastBuildDate>Wed, 13 Nov 2024 20:27:23 +0800</lastBuildDate><atom:link href="https://shenghairong.github.io/index.xml" rel="self" type="application/rss+xml"/><item><title>隐藏真实的xxx.github.io</title><link>https://shenghairong.github.io/posts/2024-11-13-hide-gh_pages/</link><pubDate>Wed, 13 Nov 2024 20:27:23 +0800</pubDate><guid>https://shenghairong.github.io/posts/2024-11-13-hide-gh_pages/</guid><description>&lt;h2 id="前言">前言&lt;/h2>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?><rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>Shawn's Blog</title><link>https://shenghairong.github.io/</link><description>Recent content on Shawn's Blog</description><generator>Hugo -- 0.138.0</generator><language>en-us</language><lastBuildDate>Sat, 14 Dec 2024 21:10:37 +0800</lastBuildDate><atom:link href="https://shenghairong.github.io/index.xml" rel="self" type="application/rss+xml"/><item><title>落地机前置代理机场</title><link>https://shenghairong.github.io/posts/2024-12-14-proxy_chain/</link><pubDate>Sat, 14 Dec 2024 21:10:37 +0800</pubDate><guid>https://shenghairong.github.io/posts/2024-12-14-proxy_chain/</guid><description>&lt;h1 id="提升代理-ip-质量与避免chatgpt降智">提升代理 IP 质量与避免ChatGPT降智&lt;/h1>
+&lt;h2 id="引言">引言&lt;/h2>
+&lt;p>目前大多数用户通过机场进行科学上网，虽然 IEPL 专线确实能提供稳定的连接，但机场服务存在两个主要问题：&lt;/p>
+&lt;ol>
+&lt;li>
+&lt;p>IP 质量问题：&lt;/p>
+&lt;ul>
+&lt;li>共享 IP 导致需要频繁处理 Cloudflare 验证&lt;/li>
+&lt;li>ChatGPT 等 AI 服务响应质量下降，可能与 IP 信誉度相关&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>解锁方式局限：&lt;/p>
+&lt;ul>
+&lt;li>机场普遍使用 DNS 解锁方案&lt;/li>
+&lt;li>导致 ChatGPT 等服务稳定性差，经常出现访问中断&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ol>
+&lt;p>为解决这些问题，我们可以采用自建前置代理 + 优质落地机的方案，既保证了连接稳定性，又能获得高质量的 IP 资源。&lt;/p>
+&lt;h2 id="方案概述">方案概述&lt;/h2>
+&lt;h3 id="架构特点">架构特点&lt;/h3>
+&lt;ol>
+&lt;li>
+&lt;p>双重代理结构：&lt;/p>
+&lt;ul>
+&lt;li>第一跳：中转服务器（负责稳定过墙）&lt;/li>
+&lt;li>第二跳：优质落地 IP（提供纯净 IP 资源）&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;li>
+&lt;p>优势：&lt;/p>
+&lt;ul>
+&lt;li>IP 纯净度高，减少验证困扰&lt;/li>
+&lt;li>独享 IP，避免身份标记&lt;/li>
+&lt;li>连接稳定性好&lt;/li>
+&lt;li>服务质量可控&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ol>
+&lt;h2 id="具体配置">具体配置&lt;/h2>
+&lt;h3 id="surge-配置文件">Surge 配置文件&lt;/h3>
+&lt;div class="highlight">&lt;pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;">&lt;code class="language-ini" data-lang="ini">&lt;span style="display:flex;">&lt;span>&lt;span style="color:#66d9ef">[General]&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#a6e22e">loglevel&lt;/span> &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#e6db74">notify&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#a6e22e">bypass-system&lt;/span> &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#e6db74">true&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#66d9ef">[Proxy]&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e"># 中转节点（第一跳）&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#a6e22e">中转节点1&lt;/span> &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#e6db74">ss, relay1.example.com, 443, encrypt-method=chacha20-ietf-poly1305, password=relay1password&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#a6e22e">中转节点2&lt;/span> &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#e6db74">ss, relay2.example.com, 443, encrypt-method=chacha20-ietf-poly1305, password=relay2password&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e"># 洛杉矶 纯净IP 落地节点（第二跳）&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#a6e22e">洛杉矶&lt;/span> &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#e6db74">ss, losangeles.example.com, 443, encrypt-method=chacha20-ietf-poly1305, password=losangelespassword, underlying-proxy=中转节点智能组&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#66d9ef">[Proxy Group]&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e"># 中转节点智能组&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#a6e22e">中转节点智能组&lt;/span> &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#e6db74">smart, 中转节点1, 中转节点2&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#75715e"># 代理选择组&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#a6e22e">PROXY&lt;/span> &lt;span style="color:#f92672">=&lt;/span> &lt;span style="color:#e6db74">select, 洛杉矶, 中转节点智能组&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#66d9ef">[Rule]&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#a6e22e">DOMAIN-SUFFIX, google.com, PROXY&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#a6e22e">DOMAIN-SUFFIX, youtube.com, PROXY&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#a6e22e">GEOIP, CN, DIRECT&lt;/span>
+&lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#a6e22e">FINAL, PROXY&lt;/span>
+&lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h3 id="网络拓扑说明">网络拓扑说明&lt;/h3>
+&lt;pre tabindex="0">&lt;code class="language-mermaid" data-lang="mermaid">graph LR
+A[客户端] --&amp;gt; B{PROXY选择组}
+B --&amp;gt;|选择洛杉矶节点| C[中转智能组]
+C --&amp;gt; D[洛杉矶落地节点]
+D --&amp;gt; E[目标服务]
+B --&amp;gt;|选择中转智能组| C
+C --&amp;gt; E
+&lt;/code>&lt;/pre>&lt;h2 id="落地机选择建议">落地机选择建议&lt;/h2>
+&lt;h3 id="zgohttps990599xyzzgocloud">&lt;a href="https://990599.xyz/zgocloud/">ZGO&lt;/a>&lt;/h3>
+&lt;ul>
+&lt;li>特点：
+&lt;ul>
+&lt;li>自有 AS，IP 资源优质&lt;/li>
+&lt;li>支持定制 BGP 优化&lt;/li>
+&lt;li>ChatGPT 可用性好&lt;/li>
+&lt;li>价格适中，适合长期使用&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ul>
+&lt;h3 id="solidvpshttpswwwbandwhcomkxsw1924html">&lt;a href="https://www.bandwh.com/kxsw/1924.html">SolidVPS&lt;/a>&lt;/h3>
+&lt;ul>
+&lt;li>特点：
+&lt;ul>
+&lt;li>全球优质带宽资源&lt;/li>
+&lt;li>IP 信誉度高&lt;/li>
+&lt;li>适合访问各类受 CF 保护的服务&lt;/li>
+&lt;li>技术支持响应快&lt;/li>
+&lt;/ul>
+&lt;/li>
+&lt;/ul>
+&lt;h2 id="使用建议">使用建议&lt;/h2>
+&lt;ol>
+&lt;li>
+&lt;p>IP 维护：&lt;/p></description></item><item><title>隐藏真实的xxx.github.io</title><link>https://shenghairong.github.io/posts/2024-11-13-hide-gh_pages/</link><pubDate>Wed, 13 Nov 2024 20:27:23 +0800</pubDate><guid>https://shenghairong.github.io/posts/2024-11-13-hide-gh_pages/</guid><description>&lt;h2 id="前言">前言&lt;/h2>
 &lt;p>在&lt;a href="https://shenghairong.github.io/posts/2024-11-10-hugo-gh_pages/">免费使用 GitHub 私有仓库部署网站&lt;/a>一文介绍了如何部署github pages，并实现了自定义域名的配置。本文介绍另一种自定义域名来访问github pages的方法， 特点是：&lt;/p>
 &lt;ul>
 &lt;li>访客无法通过&lt;code>user.me&lt;/code> 追踪到真实的&lt;code>user.github.io&lt;/code>&lt;/li>
