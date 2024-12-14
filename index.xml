@@ -65,40 +65,7 @@
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#a6e22e">GEOIP, CN, DIRECT&lt;/span>
 &lt;/span>&lt;/span>&lt;span style="display:flex;">&lt;span>&lt;span style="color:#a6e22e">FINAL, PROXY&lt;/span>
 &lt;/span>&lt;/span>&lt;/code>&lt;/pre>&lt;/div>&lt;h3 id="网络拓扑说明">网络拓扑说明&lt;/h3>
-&lt;pre tabindex="0">&lt;code class="language-mermaid" data-lang="mermaid">graph LR
-A[客户端] --&amp;gt; B{PROXY选择组}
-B --&amp;gt;|选择洛杉矶节点| C[中转智能组]
-C --&amp;gt; D[洛杉矶落地节点]
-D --&amp;gt; E[目标服务]
-B --&amp;gt;|选择中转智能组| C
-C --&amp;gt; E
-&lt;/code>&lt;/pre>&lt;h2 id="落地机选择建议">落地机选择建议&lt;/h2>
-&lt;h3 id="zgohttps990599xyzzgocloud">&lt;a href="https://990599.xyz/zgocloud/">ZGO&lt;/a>&lt;/h3>
-&lt;ul>
-&lt;li>特点：
-&lt;ul>
-&lt;li>自有 AS，IP 资源优质&lt;/li>
-&lt;li>支持定制 BGP 优化&lt;/li>
-&lt;li>ChatGPT 可用性好&lt;/li>
-&lt;li>价格适中，适合长期使用&lt;/li>
-&lt;/ul>
-&lt;/li>
-&lt;/ul>
-&lt;h3 id="solidvpshttpswwwbandwhcomkxsw1924html">&lt;a href="https://www.bandwh.com/kxsw/1924.html">SolidVPS&lt;/a>&lt;/h3>
-&lt;ul>
-&lt;li>特点：
-&lt;ul>
-&lt;li>全球优质带宽资源&lt;/li>
-&lt;li>IP 信誉度高&lt;/li>
-&lt;li>适合访问各类受 CF 保护的服务&lt;/li>
-&lt;li>技术支持响应快&lt;/li>
-&lt;/ul>
-&lt;/li>
-&lt;/ul>
-&lt;h2 id="使用建议">使用建议&lt;/h2>
-&lt;ol>
-&lt;li>
-&lt;p>IP 维护：&lt;/p></description></item><item><title>隐藏真实的xxx.github.io</title><link>https://shenghairong.github.io/posts/2024-11-13-hide-gh_pages/</link><pubDate>Wed, 13 Nov 2024 20:27:23 +0800</pubDate><guid>https://shenghairong.github.io/posts/2024-11-13-hide-gh_pages/</guid><description>&lt;h2 id="前言">前言&lt;/h2>
+&lt;p>&lt;img alt="network_graph" loading="lazy" src="https://shenghairong.github.io/posts/2024-12-14-proxy_chain/network_graph.png">&lt;/p></description></item><item><title>隐藏真实的xxx.github.io</title><link>https://shenghairong.github.io/posts/2024-11-13-hide-gh_pages/</link><pubDate>Wed, 13 Nov 2024 20:27:23 +0800</pubDate><guid>https://shenghairong.github.io/posts/2024-11-13-hide-gh_pages/</guid><description>&lt;h2 id="前言">前言&lt;/h2>
 &lt;p>在&lt;a href="https://shenghairong.github.io/posts/2024-11-10-hugo-gh_pages/">免费使用 GitHub 私有仓库部署网站&lt;/a>一文介绍了如何部署github pages，并实现了自定义域名的配置。本文介绍另一种自定义域名来访问github pages的方法， 特点是：&lt;/p>
 &lt;ul>
 &lt;li>访客无法通过&lt;code>user.me&lt;/code> 追踪到真实的&lt;code>user.github.io&lt;/code>&lt;/li>
